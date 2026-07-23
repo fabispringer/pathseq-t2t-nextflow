@@ -5,56 +5,80 @@
 #BSUB -o pathseq-t2t-nextflow.%J.out
 #BSUB -e pathseq-t2t-nextflow.%J.err
 #BSUB -W 144:00
-#BSUB -P acc_SeqLiver
-#BSUB -q premium
+#BSUB -P YOUR_LSF_PROJECT
+#BSUB -q YOUR_LSF_QUEUE
 #BSUB -R "rusage[mem=4000]"
 #BSUB -R "span[hosts=1]"
 
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-${LS_SUBCWD:-$PWD}}"
-CONDA_ENV_PREFIX="${CONDA_ENV_PREFIX:-/path/to/conda/envs/pathseq-t2t-nextflow}"
-WORK_DIR="${WORK_DIR:-/path/to/shared/nextflow-work}"
+# Run-specific paths.
+INPUT_DIR="/path/to/input"
+WORK_DIR="/path/to/nextflow-work"
+OUTDIR="/path/to/results"
 
-readonly REPO_ROOT="$(cd "${REPO_ROOT}" && pwd -P)"
-readonly PARAMS_FILE="${PARAMS_FILE:-${REPO_ROOT}/parameters.yaml}"
-
-for path_value in "${CONDA_ENV_PREFIX}" "${WORK_DIR}"; do
-  if [[ "${path_value}" == /path/to/* ]]; then
-    echo "ERROR: edit CONDA_ENV_PREFIX and WORK_DIR in run_lsf.sh or export them before submission." >&2
-    exit 2
-  fi
-done
-[[ -s "${REPO_ROOT}/main.nf" ]] || {
-  echo "ERROR: repository root not found: ${REPO_ROOT}" >&2
-  echo "Submit from the repository root or export REPO_ROOT." >&2
-  exit 1
-}
-[[ -d "${CONDA_ENV_PREFIX}/bin" ]] || {
-  echo "ERROR: Conda environment not found: ${CONDA_ENV_PREFIX}" >&2
-  exit 1
-}
-
-export PATH="${CONDA_ENV_PREFIX}/bin:${PATH}"
-export JAVA_HOME="${CONDA_ENV_PREFIX}/lib/jvm"
+# Workflow paths and version.
+readonly REPO_ROOT="/path/to/pathseq-t2t-nextflow"
+readonly WORKFLOW_VERSION="v0.1.1"
+readonly CONFIG_FILE="${REPO_ROOT}/nextflow.config"
+readonly PARAMS_FILE="/path/to/parameters.lsf.yaml"
+readonly PIPELINE_INFO_DIR="${OUTDIR}/pipeline_info"
+readonly PATHSEQ_BIN="${REPO_ROOT}/pathseq-t2t/upstream/src/pathseq-t2t"
 
 command -v nextflow >/dev/null 2>&1 || {
-  echo "ERROR: nextflow is not available in the controller job." >&2
+  echo "ERROR: nextflow is unavailable. Activate pathseq-t2t-nextflow before submitting this job." >&2
   exit 1
 }
+
 command -v bsub >/dev/null 2>&1 || {
   echo "ERROR: bsub is not available in the controller job." >&2
   exit 1
 }
+
+[[ -d "${INPUT_DIR}" ]] || {
+  echo "ERROR: input directory not found: ${INPUT_DIR}" >&2
+  exit 1
+}
+
 [[ -s "${PARAMS_FILE}" ]] || {
   echo "ERROR: parameter file not found: ${PARAMS_FILE}" >&2
   exit 1
 }
 
-mkdir -p "${WORK_DIR}"
+# Select the immutable workflow release.
+git -C "${REPO_ROOT}" checkout -q "${WORKFLOW_VERSION}"
 
-nextflow run "${REPO_ROOT}" \
+[[ -x "${PATHSEQ_BIN}" ]] || {
+  echo "ERROR: managed PathSeq-T2T runtime is missing." >&2
+  echo "Run this once:" >&2
+  echo "  cd ${REPO_ROOT}" >&2
+  echo "  ./scripts/setup_pathseq_t2t.sh" >&2
+  exit 1
+}
+
+mkdir -p \
+  "${WORK_DIR}" \
+  "${OUTDIR}" \
+  "${PIPELINE_INFO_DIR}"
+
+echo "Workflow version: ${WORKFLOW_VERSION}"
+echo "Execution profile: lsf"
+echo "Input directory:   ${INPUT_DIR}"
+echo "Work directory:    ${WORK_DIR}"
+echo "Output directory:  ${OUTDIR}"
+echo "Parameter file:    ${PARAMS_FILE}"
+
+nextflow \
+  -c "${CONFIG_FILE}" \
+  run "${REPO_ROOT}" \
   -params-file "${PARAMS_FILE}" \
   -profile lsf \
   -work-dir "${WORK_DIR}" \
-  -resume
+  -resume \
+  -with-report "${PIPELINE_INFO_DIR}/nextflow_report.html" \
+  -with-timeline "${PIPELINE_INFO_DIR}/nextflow_timeline.html" \
+  -with-trace "${PIPELINE_INFO_DIR}/nextflow_trace.tsv" \
+  -with-dag "${PIPELINE_INFO_DIR}/nextflow_dag.html" \
+  --input_dir "${INPUT_DIR}" \
+  --input_mode fastq \
+  --outdir "${OUTDIR}"

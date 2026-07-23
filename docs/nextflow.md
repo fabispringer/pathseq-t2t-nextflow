@@ -284,10 +284,16 @@ Configure the site-specific queue and billing project in `parameters.yaml`:
 
 ```yaml
 lsf:
-  queue: premium
-  project: acc_SeqLiver
+  queue: YOUR_LSF_QUEUE
+  project: YOUR_LSF_PROJECT
   max_jobs: 20
 ```
+
+The `#BSUB -P` directive in `run_lsf.sh` applies only to the one-core
+Nextflow controller job. Child process jobs receive their billing project from
+`lsf.project`: the LSF profile adds `-P <project>` to every `bsub` command
+through `process.clusterOptions`. Set both values to the appropriate project
+for the target cluster.
 
 The profile keeps the CPU, total-memory, and wall-time values defined under
 `resources`. This LSF configuration treats `rusage[mem=...]` as memory per CPU

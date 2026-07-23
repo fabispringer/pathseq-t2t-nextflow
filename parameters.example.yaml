@@ -40,6 +40,9 @@ slurm:
   max_jobs: 20
 
 lsf:
-  queue: ""
-  project: ""
+  # Forwarded to every child job as: bsub -q YOUR_LSF_QUEUE
+  queue: YOUR_LSF_QUEUE
+  # Forwarded to every child job as: bsub -P YOUR_LSF_PROJECT
+  project: YOUR_LSF_PROJECT
+  # Global limit on submitted/active LSF jobs across all processes.
   max_jobs: 20
