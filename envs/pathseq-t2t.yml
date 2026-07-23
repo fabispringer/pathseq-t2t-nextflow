@@ -1,0 +1,22 @@
+name: pathseq-t2t-nextflow
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - pandas
+  - openjdk=17
+  - nextflow=26.04.6
+  - samtools>=1.16
+  - gatk4>=4
+  - picard=3.4.0
+  - bwa>=0.7.17
+  - star=2.7.10b
+  - fastqc=0.12.1
+  - multiqc
+  - bbmap=38.91
+  - kraken2
+  - metaphlan>=4
+  - sylph>=0.9
+  - sylph-tax
+channel_priority: strict

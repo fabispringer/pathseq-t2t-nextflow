@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this workflow, cite this repository and the PathSeq-T2T method it invokes."
+title: "pathseq-t2t-nextflow"
+type: software
+authors:
+  - family-names: Springer
+    given-names: Fabian
+repository-code: "https://github.com/fabispringer/pathseq-t2t-nextflow"
+license: MIT
+version: 0.1.0
+date-released: 2026-07-22
+references:
+  - type: software
+    title: "PathSeq-T2T"
+    authors:
+      - family-names: Dohlman
+        given-names: Anders
+    repository-code: "https://github.com/abdohlman/pathseq-t2t"

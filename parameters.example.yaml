@@ -1,0 +1,40 @@
+input_mode: fastq
+input_dir: /path/to/input
+remote_input_dir: null
+bam_suffix: .bam
+outdir: results
+aligner: star
+read_group_platform: ILLUMINA
+conda_prefix: /path/to/conda/envs/pathseq-t2t-nextflow
+
+qc:
+  adapters: assets/adapters.fa
+  min_length: 45
+  bbduk_params: "qtrim=rl trimq=3 maq=25 ktrim=r k=23 mink=11 hdist=1 ftm=5 entropy=0.5 entropywindow=50 entropyk=5 tpe tbo"
+
+tools:
+  picard_jar: /path/to/picard.jar
+
+references:
+  grch38_fasta: /path/to/GRCh38.fa
+  star_index: /path/to/STAR/index
+  hostdir: /path/to/pathseq_host_resources
+  t2tref: /path/to/T2T-CHM13v2.0.fa
+  kraken_index: /path/to/kraken2/database
+  decoys_to_mask: None
+
+pathseq:
+  classifiers: kraken
+  min_clipped_read_length: 45
+  keep_intermediate: true
+  kraken_args: ""
+  metaphlan_index: ""
+  bowtie2_index: ""
+  metaphlan_args: ""
+  sylph_indexes: []
+  sylph_taxonomies: []
+  sylph_args: ""
+
+slurm:
+  queue: ""
+  max_jobs: 20
