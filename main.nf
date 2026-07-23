@@ -28,6 +28,39 @@ def normalizedNames(value) {
     .findAll { it }
 }
 
+process WRITE_WORKFLOW_VERSION {
+  tag 'workflow version'
+  label 'summarize'
+  publishDir "${params.outdir}/pipeline_info", mode: 'copy'
+
+  input:
+  val version_info
+
+  output:
+  path 'workflow_version.tsv'
+
+  script:
+  """
+  git_commit='${version_info.git_commit}'
+  git_description='${version_info.git_revision}'
+  if command -v git >/dev/null 2>&1 && git -C '${projectDir}' rev-parse --git-dir >/dev/null 2>&1; then
+    git_commit="\$(git -C '${projectDir}' rev-parse HEAD)"
+    git_description="\$(git -C '${projectDir}' describe --tags --always --dirty)"
+  fi
+
+  cat > workflow_version.tsv <<EOF
+  field\tvalue
+  workflow_name\t${version_info.workflow_name}
+  workflow_version\t${version_info.workflow_version}
+  git_commit\t\${git_commit}
+  git_description\t\${git_description}
+  requested_revision\t${version_info.git_revision}
+  repository\t${version_info.repository}
+  nextflow_version\t${version_info.nextflow_version}
+  EOF
+  """
+}
+
 process STAGE_FASTQ_INPUT {
   tag "$sample_id"
   label 'stage'
@@ -773,6 +806,16 @@ process COLLATE_STAR_GENE_COUNTS {
 
 workflow {
   requireParam(params.outdir, 'outdir')
+
+  versionInfo = [
+    workflow_name: workflow.manifest.name ?: 'pathseq-t2t-nextflow',
+    workflow_version: workflow.manifest.version ?: 'unknown',
+    git_commit: workflow.commitId ?: 'unknown',
+    git_revision: workflow.revision ?: 'local-checkout',
+    repository: workflow.repository ?: 'local-checkout',
+    nextflow_version: workflow.nextflow.version ?: 'unknown'
+  ]
+  WRITE_WORKFLOW_VERSION(versionInfo)
 
   aligner = params.aligner.toString().toLowerCase()
   if (!(aligner in ['bwa', 'star'])) {

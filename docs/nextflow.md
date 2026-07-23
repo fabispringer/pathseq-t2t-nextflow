@@ -124,6 +124,7 @@ The resulting directory tree is:
 │   ├── nextflow_timeline.html
 │   ├── nextflow_trace.tsv
 │   ├── nextflow_dag.html
+│   ├── workflow_version.tsv
 │   └── input_audit/
 │       └── <sample>.bam2fastq.stats.tsv       # BAM input mode only
 └── samples/
@@ -146,6 +147,30 @@ The resulting directory tree is:
 
 Keep the scratch work directory until the cohort run and compact result export
 have been checked; it is required for `-resume`.
+
+## Workflow version and provenance
+
+Release versions follow semantic versioning and are published as immutable Git
+tags such as `v0.1.0`. Run a distinct release from a detached tag:
+
+```bash
+git fetch --tags
+git checkout --detach v0.1.0
+git describe --tags --exact-match
+```
+
+The workflow manifest and `CITATION.cff` both record the release version.
+`WRITE_WORKFLOW_VERSION` publishes
+`outdir/pipeline_info/workflow_version.tsv` for every run. It records:
+
+- workflow name and semantic version;
+- Git commit, tag/dirty description, and requested revision;
+- source repository;
+- Nextflow version.
+
+The Conda environment retains the stable name `pathseq-t2t-nextflow`. A
+version-specific environment name or prefix is not required; the environment
+specification remains part of the tagged repository.
 
 For STAR, the pipeline converts STAR's unmapped FASTQs into:
 

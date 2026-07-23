@@ -34,4 +34,23 @@ for file in "${required[@]}"; do
   }
 done
 
+manifest_version="$(
+  awk -F"'" '/^[[:space:]]*version = / { print $2; exit }' nextflow.config
+)"
+citation_version="$(
+  awk '/^version:/ { value=$2; gsub(/"/, "", value); print value; exit }' CITATION.cff
+)"
+[[ -n "${manifest_version}" ]] || {
+  echo "ERROR: Missing manifest version in nextflow.config." >&2
+  exit 1
+}
+[[ "${manifest_version}" == "${citation_version}" ]] || {
+  echo "ERROR: Version mismatch: manifest=${manifest_version}, CITATION.cff=${citation_version}" >&2
+  exit 1
+}
+rg -q "process WRITE_WORKFLOW_VERSION" main.nf || {
+  echo "ERROR: Missing workflow-version output process." >&2
+  exit 1
+}
+
 echo "Repository checks passed."

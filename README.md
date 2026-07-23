@@ -91,6 +91,20 @@ Input discovery is recursive. FASTQ mode expects paired files ending in
 
 ## Running
 
+For reproducible analyses, execute an immutable release tag rather than the
+moving `main` branch:
+
+```bash
+git fetch --tags
+git checkout --detach v0.1.0
+git describe --tags --exact-match
+```
+
+The Conda environment remains named `pathseq-t2t-nextflow`; it does not need a
+version-specific prefix. Every run writes `pipeline_info/workflow_version.tsv`
+with the workflow version, Git commit and revision, repository, and Nextflow
+version.
+
 SLURM:
 
 ```bash
