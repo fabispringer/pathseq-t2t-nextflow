@@ -1,0 +1,11 @@
+.DS_Store
+.nextflow*
+work/
+results/
+pathseq-t2t/upstream/
+*.tar.gz
+*.sha256
+parameters.yaml
+/references/
+__pycache__/
+*.pyc
