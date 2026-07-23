@@ -47,6 +47,9 @@ Edit `parameters.yaml` before running. The important fields are:
 - `resources.*` - per-stage CPU, memory, wall-time, and GATK heap settings
 - `slurm.max_jobs` - global maximum number of submitted/active SLURM jobs;
   configured as `20`, equivalent to an array concurrency limit such as `%20`
+- `lsf.queue` - LSF queue supplied to `bsub -q`
+- `lsf.project` - LSF billing project supplied to `bsub -P`
+- `lsf.max_jobs` - global maximum number of submitted/active LSF jobs
 
 Both BWA and STAR alignment consume the cleaned paired FASTQs emitted by
 BBDuk. Surviving singleton reads, including reads made singleton by BBDuk, are
@@ -239,6 +242,48 @@ Nextflow applies `slurm.max_jobs` through `executor.queueSize`. When the limit
 is reached, completed jobs free slots for subsequent processes. Change the
 value in `parameters.yaml` for cohort runs; it applies across the whole
 workflow rather than separately to each process.
+
+## LSF execution
+
+The `lsf` profile submits every workflow process through `bsub`:
+
+```bash
+nextflow run . \
+  -params-file ./parameters.yaml \
+  -profile lsf \
+  -work-dir "$WORK_DIR" \
+  -resume
+```
+
+Configure the site-specific queue and billing project in `parameters.yaml`:
+
+```yaml
+lsf:
+  queue: premium
+  project: acc_SeqLiver
+  max_jobs: 20
+```
+
+The profile keeps the CPU, total-memory, and wall-time values defined under
+`resources`. This LSF configuration treats `rusage[mem=...]` as memory per CPU
+slot, so Nextflow divides each process's total requested memory by its CPU
+count. For example, an 8-CPU process requesting 64 GB total asks LSF for
+approximately 8 GB per slot. All multi-core tasks also request
+`span[hosts=1]`.
+
+If the cluster permits scheduler submission from compute jobs, the optional
+`run_lsf.sh` wrapper can submit the long-lived Nextflow controller itself:
+
+```bash
+bsub < run_lsf.sh
+```
+
+Submit it from the repository root after editing `CONDA_ENV_PREFIX` and
+`WORK_DIR`, or export those values before submission. The controller requests
+only one CPU and 4 GB. It then submits the actual pipeline tasks with the
+process-specific resources. If nested `bsub` submission is not allowed at the
+site, start the same `nextflow run` command from a persistent login-node
+session instead.
 
 For a local graph and syntax preview on a machine with Nextflow installed:
 

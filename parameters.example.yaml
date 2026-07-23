@@ -38,3 +38,8 @@ pathseq:
 slurm:
   queue: ""
   max_jobs: 20
+
+lsf:
+  queue: ""
+  project: ""
+  max_jobs: 20

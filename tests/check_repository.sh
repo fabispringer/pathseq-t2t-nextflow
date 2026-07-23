@@ -7,7 +7,7 @@ cd "${repo_root}"
 bash -n scripts/*.sh overrides/*.sh
 python3 -m py_compile scripts/*.py
 
-if rg -n -i '(fspringe|/g/scb|pathseq-t2t_setup|openclaw|gmail)' \
+if rg -n -i '(/Users/[^/]+/|/home/[^/]+/|pathseq-t2t_setup|openclaw|gmail)' \
   --glob '!pathseq-t2t/upstream/**' \
   --glob '!tests/check_repository.sh' \
   --glob '!.nextflow*' .; then
@@ -16,6 +16,7 @@ if rg -n -i '(fspringe|/g/scb|pathseq-t2t_setup|openclaw|gmail)' \
 fi
 
 required=(
+  .gitignore
   main.nf
   nextflow.config
   parameters.example.yaml
@@ -23,6 +24,7 @@ required=(
   LICENSE
   THIRD_PARTY_NOTICES.md
   CITATION.cff
+  run_lsf.sh
   scripts/setup_pathseq_t2t.sh
 )
 for file in "${required[@]}"; do
