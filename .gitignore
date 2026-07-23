@@ -9,3 +9,5 @@ parameters.yaml
 /references/
 __pycache__/
 *.pyc
+parameters.local.yaml
+run.local.sh
