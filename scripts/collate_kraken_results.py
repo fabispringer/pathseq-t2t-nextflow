@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collate Dohlman Kraken genus/species clade counts and RPM by tax ID."""
+"""Collate Dohlman Kraken clade counts and RPM by taxonomic rank and tax ID."""
 
 from __future__ import annotations
 
@@ -10,7 +10,16 @@ from pathlib import Path
 
 SUFFIX = ".kraken.txt"
 TARGET_DOMAINS = {"Bacteria", "Archaea"}
-RANKS = {"genus": "G", "species": "S"}
+# Kraken's standard rank codes. Keeping the output levels here makes it explicit
+# which cohort matrices are produced by default.
+RANKS = {
+    "phylum": "P",
+    "class": "C",
+    "order": "O",
+    "family": "F",
+    "genus": "G",
+    "species": "S",
+}
 
 
 def sample_id(path: Path) -> str:
@@ -118,11 +127,16 @@ def main() -> None:
     counts_total: dict[str, str] = {}
     rpm_total: dict[str, str] = {}
     for sample, rows in sample_rows.items():
+        # The historical liver-atlas tables use a row labelled "Bacteria" for
+        # the combined bacterial and archaeal signal.
         domain_rows = [rows.get(tax_id) for tax_id in ("2", "2157")]
         counts_total[sample] = str(sum(int(row["reads_clade"]) for row in domain_rows if row))
         rpm_total[sample] = str(sum(float(row["reads_clade_per_million"]) for row in domain_rows if row))
 
     for label, rank in RANKS.items():
+        # Build the cohort-wide union of observed taxa at this rank. Domain
+        # membership comes from the kraken2-inspect hierarchy, so eukaryotic
+        # and viral rows are excluded by lineage rather than by taxon name.
         tax_ids = sorted(
             {
                 tax_id
@@ -140,7 +154,7 @@ def main() -> None:
             args.output_dir / f"kraken_{label}_rpm.tsv",
             tax_ids, samples, sample_rows, "reads_clade_per_million", rpm_total,
         )
-    print(f"Collated Kraken genus/species profiles for {len(samples)} samples")
+    print(f"Collated Kraken profiles at {len(RANKS)} ranks for {len(samples)} samples")
 
 
 if __name__ == "__main__":

@@ -96,7 +96,7 @@ moving `main` branch:
 
 ```bash
 git fetch --tags
-git checkout --detach v0.1.0
+git checkout --detach v0.2.0
 git describe --tags --exact-match
 ```
 
@@ -166,8 +166,8 @@ input behavior, and operational guidance.
 After all samples finish, the workflow generates cohort-level read-count QC
 tables. STAR runs additionally produce unstranded, forward, and reverse gene
 count matrices. When Kraken is enabled, the workflow generates bacterial and
-archaeal genus/species count and RPM matrices using taxonomy from the exact
-configured Kraken database.
+archaeal phylum, class, order, family, genus, and species count and RPM
+matrices using taxonomy from the exact configured Kraken database.
 
 For compatibility with the liver-atlas bulk analysis, Kraken matrices use the
 row label `Bacteria` for the sum of the Bacteria and Archaea domain-level clade

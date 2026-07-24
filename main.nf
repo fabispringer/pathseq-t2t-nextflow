@@ -486,7 +486,7 @@ process PREPARE_PATHSEQ {
 }
 
 process PREPARE_KRAKEN_TAXONOMY {
-  label 'prepare'
+  label 'prepare_kraken'
 
   output:
   path 'kraken_taxonomy.tsv', emit: taxonomy

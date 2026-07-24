@@ -9,7 +9,11 @@ from pathlib import Path
 
 
 SUFFIX = ".star.ReadsPerGene.out.tsv"
+# STAR places these counting diagnostics before the gene rows in every
+# ReadsPerGene.out.tab file.
 QC_ROWS = ("N_unmapped", "N_multimapping", "N_noFeature", "N_ambiguous")
+# The three numeric columns correspond to STAR's unstranded, read-1-aligned
+# forward, and read-2-aligned reverse counting conventions.
 COLUMNS = {
     "unstranded": 1,
     "forward": 2,
@@ -87,6 +91,8 @@ def main() -> None:
             f"count files={samples}, completed={expected_samples}"
         )
 
+    # Requiring the same ordered identifiers prevents counts from different
+    # annotations—or differently ordered annotations—from being misaligned.
     reference_qc, _, reference_genes, _ = tables[samples[0]]
     for sample in samples[1:]:
         qc_ids, _, genes, _ = tables[sample]
@@ -101,6 +107,8 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     qc_values = {sample: tables[sample][1] for sample in samples}
     gene_values = {sample: tables[sample][3] for sample in samples}
+    # Write each STAR counting convention separately so downstream analyses
+    # can select the matrix matching the library strandedness.
     for label, column_index in COLUMNS.items():
         value_index = column_index - 1
         write_matrix(

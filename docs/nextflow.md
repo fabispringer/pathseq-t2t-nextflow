@@ -115,6 +115,14 @@ The resulting directory tree is:
 │   │   └── read_count_long.tsv
 │   └── kraken/                              # Kraken classifier only
 │       ├── kraken_taxonomy.tsv
+│       ├── kraken_phylum_counts.tsv
+│       ├── kraken_phylum_rpm.tsv
+│       ├── kraken_class_counts.tsv
+│       ├── kraken_class_rpm.tsv
+│       ├── kraken_order_counts.tsv
+│       ├── kraken_order_rpm.tsv
+│       ├── kraken_family_counts.tsv
+│       ├── kraken_family_rpm.tsv
 │       ├── kraken_genus_counts.tsv
 │       ├── kraken_genus_rpm.tsv
 │       ├── kraken_species_counts.tsv
@@ -151,11 +159,11 @@ have been checked; it is required for `-resume`.
 ## Workflow version and provenance
 
 Release versions follow semantic versioning and are published as immutable Git
-tags such as `v0.1.0`. Run a distinct release from a detached tag:
+tags such as `v0.2.0`. Run a distinct release from a detached tag:
 
 ```bash
 git fetch --tags
-git checkout --detach v0.1.0
+git checkout --detach v0.2.0
 git describe --tags --exact-match
 ```
 
@@ -203,12 +211,12 @@ paired/unpaired counting convention.
 
 When Kraken is enabled, `PREPARE_KRAKEN_TAXONOMY` runs `kraken2-inspect` once
 against the configured database. `COLLATE_KRAKEN_RESULTS` joins final Kraken
-tables to that taxonomy and writes genus- and species-level count and RPM
-matrices to `outdir/cohort/kraken/`. Only Bacteria and Archaea descendants are
-retained. For liver-atlas compatibility, the matrix row named `Bacteria` is
-defined as the Bacteria plus Archaea domain-level clade counts; Archaea taxa
-are otherwise retained normally. RPM values are inherited unchanged from the
-upstream summarizer output.
+tables to that taxonomy and writes phylum-, class-, order-, family-, genus-,
+and species-level count and RPM matrices to `outdir/cohort/kraken/`. Only
+Bacteria and Archaea descendants are retained. For liver-atlas compatibility,
+the matrix row named `Bacteria` is defined as the Bacteria plus Archaea
+domain-level clade counts; Archaea taxa are otherwise retained normally. RPM
+values are inherited unchanged from the upstream summarizer output.
 
 For BWA, the pipeline starts PathSeq-T2T at `prefilter` using the aligned
 GRCh38 BAM.
