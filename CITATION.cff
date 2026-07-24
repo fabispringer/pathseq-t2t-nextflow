@@ -7,8 +7,8 @@ authors:
     given-names: Fabian
 repository-code: "https://github.com/fabispringer/pathseq-t2t-nextflow"
 license: MIT
-version: 0.1.0
-date-released: 2026-07-22
+version: 0.2.0
+date-released: 2026-07-24
 references:
   - type: software
     title: "PathSeq-T2T"
