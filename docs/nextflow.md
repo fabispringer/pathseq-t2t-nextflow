@@ -47,13 +47,19 @@ Edit `parameters.yaml` before running. The important fields are:
 - `resources.*` - per-stage CPU, memory, wall-time, and GATK heap settings
 - `slurm.max_jobs` - global maximum number of submitted/active SLURM jobs;
   configured as `20`, equivalent to an array concurrency limit such as `%20`
-- `lsf.queue` - LSF queue supplied to `bsub -q`
-- `lsf.project` - LSF billing project supplied to `bsub -P`
-- `lsf.max_jobs` - global maximum number of submitted/active LSF jobs
 
-Both BWA and STAR alignment consume the cleaned paired FASTQs emitted by
-BBDuk. Surviving singleton reads, including reads made singleton by BBDuk, are
-cleaned separately and carried through BWA or STAR as single-end reads.
+Both BWA and STAR alignment consume the cleaned FASTQs emitted by BBDuk.
+Samples may contain paired reads, single-end/unpaired reads, or both. Empty
+read categories are skipped; surviving singleton reads, including reads made
+singleton by BBDuk, are cleaned separately and aligned as single-end reads.
+The pipeline fails with a descriptive error if no reads remain after QC.
+
+For mixed samples, STAR aligns the paired and single-end categories separately,
+merges the coordinate-sorted alignment BAMs, and sums their
+`ReadsPerGene.out.tab` count columns. The published canonical
+`<sample>.star.Log.final.out` is the paired-run log, while both the paired and
+single-end logs are retained in the process `star_logs` output. For single-only
+samples, the canonical log and gene-count table come from the single-end run.
 
 ## BAM input mode
 
@@ -75,6 +81,16 @@ and R2; category-zero and singleton reads are retained in an unpaired FASTQ.
 The process fails unless R1 and R2 contain equal numbers of reads and the total
 FASTQ read count exactly equals the number of primary BAM records. The audit is
 published as `outdir/pipeline_info/input_audit/<sample>.bam2fastq.stats.tsv`.
+Downstream host alignment supports BAMs whose primary records are entirely
+paired, entirely single-end, or a mixture of both.
+
+PathSeq filtering retains a stable paired/unpaired two-BAM interface. If GATK
+reports zero final reads for one category and therefore does not write that
+category's BAM/SBI output, the reviewed `qcfilter.sh` override creates a valid
+header-only BAM for it. A missing output remains an error when the GATK metrics
+report one or more reads in that category. The reviewed `t2tfilter.sh` override
+detects such zero-record BAMs and skips their FASTQ conversion, BWA alignment,
+and extraction, carrying a header-only BAM forward for that category.
 
 Set `prefer_original_qualities: true` only if representative BAMs contain
 meaningful `OQ` tags and those original qualities are desired. BAMs cannot
@@ -132,7 +148,6 @@ The resulting directory tree is:
 │   ├── nextflow_timeline.html
 │   ├── nextflow_trace.tsv
 │   ├── nextflow_dag.html
-│   ├── workflow_version.tsv
 │   └── input_audit/
 │       └── <sample>.bam2fastq.stats.tsv       # BAM input mode only
 └── samples/
@@ -155,30 +170,6 @@ The resulting directory tree is:
 
 Keep the scratch work directory until the cohort run and compact result export
 have been checked; it is required for `-resume`.
-
-## Workflow version and provenance
-
-Release versions follow semantic versioning and are published as immutable Git
-tags such as `v0.2.0`. Run a distinct release from a detached tag:
-
-```bash
-git fetch --tags
-git checkout --detach v0.2.0
-git describe --tags --exact-match
-```
-
-The workflow manifest and `CITATION.cff` both record the release version.
-`WRITE_WORKFLOW_VERSION` publishes
-`outdir/pipeline_info/workflow_version.tsv` for every run. It records:
-
-- workflow name and semantic version;
-- Git commit, tag/dirty description, and requested revision;
-- source repository;
-- Nextflow version.
-
-The Conda environment retains the stable name `pathseq-t2t-nextflow`. A
-version-specific environment name or prefix is not required; the environment
-specification remains part of the tagged repository.
 
 For STAR, the pipeline converts STAR's unmapped FASTQs into:
 
@@ -217,6 +208,9 @@ Bacteria and Archaea descendants are retained. For liver-atlas compatibility,
 the matrix row named `Bacteria` is defined as the Bacteria plus Archaea
 domain-level clade counts; Archaea taxa are otherwise retained normally. RPM
 values are inherited unchanged from the upstream summarizer output.
+Integer-valued Kraken counts serialized by the upstream pandas workflow with a
+decimal suffix (for example, `6.0`) are normalized back to integer count text
+by the cohort collator; genuinely fractional or negative counts are rejected.
 
 For BWA, the pipeline starts PathSeq-T2T at `prefilter` using the aligned
 GRCh38 BAM.
@@ -256,8 +250,12 @@ nextflow run . \
 For BAM input, use `--input_mode bam`. The staging operation appears as
 `STAGE_FASTQ_INPUT` or `STAGE_BAM_INPUT` in the Nextflow DAG, trace, timeline,
 and report. Every downstream process consumes only these staged outputs.
-Discovery is recursive: FASTQ mode selects `_R1.fastq.gz`/`_R2.fastq.gz`
-pairs, while BAM mode selects files ending in `bam_suffix`.
+Discovery is recursive: FASTQ mode selects pairs named either
+`_R1.fastq.gz`/`_R2.fastq.gz` or `_1.fastq.gz`/`_2.fastq.gz`, while BAM mode
+selects files ending in `bam_suffix`. FASTQ pairs from either convention are
+staged as `<sample>_R1.fastq.gz` and `<sample>_R2.fastq.gz`, so downstream
+processes always receive the same normalized names. A sample is rejected if
+its pair is incomplete or if both naming conventions are present.
 
 The trace includes both observed utilization (`%cpu`, `peak_rss`, I/O, and
 runtime) and the requested `cpus`, `memory`, and `time` for each task.
@@ -275,54 +273,6 @@ Nextflow applies `slurm.max_jobs` through `executor.queueSize`. When the limit
 is reached, completed jobs free slots for subsequent processes. Change the
 value in `parameters.yaml` for cohort runs; it applies across the whole
 workflow rather than separately to each process.
-
-## LSF execution
-
-The `lsf` profile submits every workflow process through `bsub`:
-
-```bash
-nextflow run . \
-  -params-file ./parameters.yaml \
-  -profile lsf \
-  -work-dir "$WORK_DIR" \
-  -resume
-```
-
-Configure the site-specific queue and billing project in `parameters.yaml`:
-
-```yaml
-lsf:
-  queue: YOUR_LSF_QUEUE
-  project: YOUR_LSF_PROJECT
-  max_jobs: 20
-```
-
-The `#BSUB -P` directive in `run_lsf.sh` applies only to the one-core
-Nextflow controller job. Child process jobs receive their billing project from
-`lsf.project`: the LSF profile adds `-P <project>` to every `bsub` command
-through `process.clusterOptions`. Set both values to the appropriate project
-for the target cluster.
-
-The profile keeps the CPU, total-memory, and wall-time values defined under
-`resources`. This LSF configuration treats `rusage[mem=...]` as memory per CPU
-slot, so Nextflow divides each process's total requested memory by its CPU
-count. For example, an 8-CPU process requesting 64 GB total asks LSF for
-approximately 8 GB per slot. All multi-core tasks also request
-`span[hosts=1]`.
-
-If the cluster permits scheduler submission from compute jobs, the optional
-`run_lsf.sh` wrapper can submit the long-lived Nextflow controller itself:
-
-```bash
-bsub < run_lsf.sh
-```
-
-Submit it from the repository root after editing `CONDA_ENV_PREFIX` and
-`WORK_DIR`, or export those values before submission. The controller requests
-only one CPU and 4 GB. It then submits the actual pipeline tasks with the
-process-specific resources. If nested `bsub` submission is not allowed at the
-site, start the same `nextflow run` command from a persistent login-node
-session instead.
 
 For a local graph and syntax preview on a machine with Nextflow installed:
 

@@ -6,18 +6,50 @@ The managed runtime is pinned to PathSeq-T2T commit
 reviewed modified command files. It does not change any checkout outside this
 project.
 
+The reviewed, version-controlled source files are:
+
+- `overrides/qcfilter.sh`
+- `overrides/t2tfilter.sh`
+
+During setup they overwrite the corresponding files inside the generated,
+Git-ignored runtime:
+
+- `pathseq-t2t/upstream/src/commands/qcfilter.sh`
+- `pathseq-t2t/upstream/src/commands/t2tfilter.sh`
+
+The files under `overrides/` are the sources of truth and are the files that
+should be committed. The copies under `pathseq-t2t/upstream/` are generated
+runtime files and should not be committed. When testing a revised override
+against an already-created runtime, copy it to both locations; a fresh
+`scripts/setup_pathseq_t2t.sh` installation performs that copy automatically.
+
 ## `qcfilter.sh`
 
 - validates the host-unaligned input as an unaligned BAM;
 - builds GATK commands as arrays, avoiding an empty positional argument when
-  no additional `PathSeqFilterSpark` arguments are supplied.
+  no additional `PathSeqFilterSpark` arguments are supplied;
+- reads `FINAL_PAIRED_READS` and `FINAL_UNPAIRED_READS` from the GATK filter
+  metrics before requiring category outputs;
+- accepts a missing paired or unpaired PathSeq output only when the
+  corresponding final count is zero;
+- creates a valid header-only BAM for a zero-count category, preserving the
+  paired/unpaired file contract required by later workflow stages;
+- still fails if metrics report retained reads but the corresponding BAM/SBI
+  output is missing.
 
 ## `t2tfilter.sh`
 
 - corrects Picard option spelling and explicit stdin/stdout handling;
 - writes the selected aligned reads instead of discarding them;
 - retains configured decoy-overlapping reads and merges them into the output;
-- makes output and flagstat paths explicit and consistent.
+- makes output and flagstat paths explicit and consistent;
+- counts paired and unpaired input records independently;
+- skips FASTQ conversion, BWA alignment, and extraction for a zero-record
+  category, writing a header-only final BAM instead;
+- validates zero-record placeholders as unaligned BAMs and nonempty T2T
+  outputs as aligned BAMs;
+- preserves the paired/unpaired two-BAM interface for entirely single-end,
+  entirely paired, and mixed samples.
 
 ## Upstream summarizer retained
 
