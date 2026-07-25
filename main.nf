@@ -291,23 +291,17 @@ process ALIGN_BWA {
   has_paired=false
   has_unpaired=false
 
-  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${r1}; then
-    r1_has_data=true
-  else
-    r1_has_data=false
-  fi
-  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${r2}; then
-    r2_has_data=true
-  else
-    r2_has_data=false
-  fi
-  if [[ "\${r1_has_data}" == true && "\${r2_has_data}" == true ]]; then
+  r1_state="\$(python3 '${projectDir}/scripts/check_fastq_content.py' ${r1})"
+  r2_state="\$(python3 '${projectDir}/scripts/check_fastq_content.py' ${r2})"
+  unpaired_state="\$(python3 '${projectDir}/scripts/check_fastq_content.py' ${unpaired})"
+
+  if [[ "\${r1_state}" == nonempty && "\${r2_state}" == nonempty ]]; then
     has_paired=true
-  elif [[ "\${r1_has_data}" != "\${r2_has_data}" ]]; then
-    echo "ERROR: R1/R2 content mismatch for ${sample_id}: R1_has_data=\${r1_has_data}, R2_has_data=\${r2_has_data}" >&2
+  elif [[ "\${r1_state}" != "\${r2_state}" ]]; then
+    echo "ERROR: R1/R2 content mismatch for ${sample_id}: R1=\${r1_state}, R2=\${r2_state}" >&2
     exit 1
   fi
-  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${unpaired}; then
+  if [[ "\${unpaired_state}" == nonempty ]]; then
     has_unpaired=true
   fi
   if [[ "\${has_paired}" == false && "\${has_unpaired}" == false ]]; then
@@ -387,23 +381,17 @@ process ALIGN_STAR {
   has_paired=false
   has_unpaired=false
 
-  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${r1}; then
-    r1_has_data=true
-  else
-    r1_has_data=false
-  fi
-  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${r2}; then
-    r2_has_data=true
-  else
-    r2_has_data=false
-  fi
-  if [[ "\${r1_has_data}" == true && "\${r2_has_data}" == true ]]; then
+  r1_state="\$(python3 '${projectDir}/scripts/check_fastq_content.py' ${r1})"
+  r2_state="\$(python3 '${projectDir}/scripts/check_fastq_content.py' ${r2})"
+  unpaired_state="\$(python3 '${projectDir}/scripts/check_fastq_content.py' ${unpaired})"
+
+  if [[ "\${r1_state}" == nonempty && "\${r2_state}" == nonempty ]]; then
     has_paired=true
-  elif [[ "\${r1_has_data}" != "\${r2_has_data}" ]]; then
-    echo "ERROR: R1/R2 content mismatch for ${sample_id}: R1_has_data=\${r1_has_data}, R2_has_data=\${r2_has_data}" >&2
+  elif [[ "\${r1_state}" != "\${r2_state}" ]]; then
+    echo "ERROR: R1/R2 content mismatch for ${sample_id}: R1=\${r1_state}, R2=\${r2_state}" >&2
     exit 1
   fi
-  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${unpaired}; then
+  if [[ "\${unpaired_state}" == nonempty ]]; then
     has_unpaired=true
   fi
   if [[ "\${has_paired}" == false && "\${has_unpaired}" == false ]]; then
