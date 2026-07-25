@@ -35,4 +35,36 @@ for file in "${required[@]}"; do
   }
 done
 
+expected_version="0.3.0"
+citation_version="$(awk '$1 == "version:" { print $2; exit }' CITATION.cff)"
+manifest_version="$(
+  awk -F"'" '
+    /^[[:space:]]*version[[:space:]]*=/ {
+      print $2
+      exit
+    }
+  ' nextflow.config
+)"
+run_version="$(
+  awk -F'"' '
+    /^readonly WORKFLOW_VERSION=/ {
+      value=$2
+      sub(/^v/, "", value)
+      print value
+      exit
+    }
+  ' run.sh
+)"
+for version_source in \
+  "CITATION.cff:${citation_version}" \
+  "nextflow.config:${manifest_version}" \
+  "run.sh:${run_version}"; do
+  source_file="${version_source%%:*}"
+  observed_version="${version_source#*:}"
+  [[ "${observed_version}" == "${expected_version}" ]] || {
+    echo "ERROR: ${source_file} version is '${observed_version}', expected '${expected_version}'." >&2
+    exit 1
+  }
+done
+
 echo "Repository checks passed."
