@@ -136,6 +136,10 @@ HLP
   require_file "${input_unpaired}"
   ubam_check_or_die "${input_paired}" "t2tfilter: input_paired"
   ubam_check_or_die "${input_unpaired}" "t2tfilter: input_unpaired"
+  local paired_input_records unpaired_input_records
+  paired_input_records="$(samtools view -c "${input_paired}")"
+  unpaired_input_records="$(samtools view -c "${input_unpaired}")"
+  log "Input records: paired=${paired_input_records}; unpaired=${unpaired_input_records}"
 
   if [[ -z "${threads}" ]]; then
     if command -v nproc >/dev/null 2>&1; then
@@ -178,7 +182,7 @@ HLP
   log "t2tfilter threads=${threads} sample=${sample_base}"
   log " decoys_to_mask: ${decoys_to_mask:-<None>}"
 
-  if [[ ! -f "${fastq_r1}" || ! -f "${fastq_r2}" ]]; then
+  if [[ "${paired_input_records}" -gt 0 && ( ! -f "${fastq_r1}" || ! -f "${fastq_r2}" ) ]]; then
     log "Converting paired QC-filtered BAM to FASTQ"
     if [[ -n "${PICARD_JAR}" ]]; then
       java -jar "${PICARD_JAR}" SamToFastq \
@@ -195,7 +199,7 @@ HLP
     fi
   fi
 
-  if [[ ! -f "${fastq_u}" ]]; then
+  if [[ "${unpaired_input_records}" -gt 0 && ! -f "${fastq_u}" ]]; then
     log "Converting unpaired QC-filtered BAM to FASTQ"
     if [[ -n "${PICARD_JAR}" ]]; then
       java -jar "${PICARD_JAR}" SamToFastq \
@@ -210,63 +214,75 @@ HLP
     fi
   fi
 
-  if [[ ! -f "${bam_aligned_paired}" || ${dont_overwrite} -eq 0 ]]; then
-    log "Aligning paired reads to T2T"
-    bwa mem -t "${threads}" -T 0 "${reference}" "${fastq_r1}" "${fastq_r2}" \
-      | samtools view -@ "${threads}" -S -h -b -o "${bam_aligned_paired}" -
-    [[ -f "${bam_aligned_paired}" ]] || die "Failed to create aligned paired BAM."
-  fi
+  if [[ "${paired_input_records}" -eq 0 ]]; then
+    log "No paired reads entered t2tfilter; creating a header-only paired output BAM"
+    samtools view -H "${input_paired}" |
+      samtools view -b -o "${output_paired}" -
+  else
+    if [[ ! -f "${bam_aligned_paired}" || ${dont_overwrite} -eq 0 ]]; then
+      log "Aligning paired reads to T2T"
+      bwa mem -t "${threads}" -T 0 "${reference}" "${fastq_r1}" "${fastq_r2}" \
+        | samtools view -@ "${threads}" -S -h -b -o "${bam_aligned_paired}" -
+      [[ -f "${bam_aligned_paired}" ]] || die "Failed to create aligned paired BAM."
+    fi
 
-  # Reads that do not align well to T2T continue to microbial classification.
-  # If a decoy BED is configured, decoy-overlapping reads are rescued and merged
-  # back into the final BAM after the primary T2T-unmapped extraction.
-  if [[ ! -f "${output_paired}" || ${dont_overwrite} -eq 0 ]]; then
-    log "[ Extracting paired unaligned reads ]"
-    time samtools view -@ "${threads}" -b -h -f 3 -e '[AS]>35' \
-      -U >(samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${output_paired}" -) \
-      -o "${bam_decoys_paired}" \
-      "${bam_aligned_paired}"
+    # Reads that do not align well to T2T continue to microbial classification.
+    # If a decoy BED is configured, decoy-overlapping reads are rescued and merged
+    # back into the final BAM after the primary T2T-unmapped extraction.
+    if [[ ! -f "${output_paired}" || ${dont_overwrite} -eq 0 ]]; then
+      log "[ Extracting paired unaligned reads ]"
+      time samtools view -@ "${threads}" -b -h -f 3 -e '[AS]>35' \
+        -U >(samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${output_paired}" -) \
+        -o "${bam_decoys_paired}" \
+        "${bam_aligned_paired}"
 
-    if [[ -n "${decoys_to_mask}" ]]; then
-      log "[ Extracting paired decoy-overlap reads for merge ]"
-      time samtools view -@ "${threads}" -b -h -f 3 -e '[AS]>35' "${L_ARG[@]}" \
-        "${bam_aligned_paired}" \
-        | samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${bam_decoys_paired}" -
+      if [[ -n "${decoys_to_mask}" ]]; then
+        log "[ Extracting paired decoy-overlap reads for merge ]"
+        time samtools view -@ "${threads}" -b -h -f 3 -e '[AS]>35' "${L_ARG[@]}" \
+          "${bam_aligned_paired}" \
+          | samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${bam_decoys_paired}" -
 
-      if [[ -s "${bam_decoys_paired}" ]]; then
-        local tmp_merge_p="${output_paired}.tmp.merge.bam"
-        log "[ Merging paired decoy-overlap reads into output ]"
-        time samtools cat -o "${tmp_merge_p}" "${output_paired}" "${bam_decoys_paired}"
-        mv -f "${tmp_merge_p}" "${output_paired}"
+        if [[ -s "${bam_decoys_paired}" ]]; then
+          local tmp_merge_p="${output_paired}.tmp.merge.bam"
+          log "[ Merging paired decoy-overlap reads into output ]"
+          time samtools cat -o "${tmp_merge_p}" "${output_paired}" "${bam_decoys_paired}"
+          mv -f "${tmp_merge_p}" "${output_paired}"
+        fi
       fi
     fi
   fi
 
-  if [[ ! -f "${bam_aligned_unpaired}" || ${dont_overwrite} -eq 0 ]]; then
-    log "[ Aligning unpaired reads to T2T ]"
-    bwa mem -t "${threads}" -T 0 "${reference}" "${fastq_u}" \
-      | samtools view -@ "${threads}" -S -h -b -o "${bam_aligned_unpaired}" -
-    [[ -f "${bam_aligned_unpaired}" ]] || die "Failed to create aligned unpaired BAM."
-  fi
+  if [[ "${unpaired_input_records}" -eq 0 ]]; then
+    log "No unpaired reads entered t2tfilter; creating a header-only unpaired output BAM"
+    samtools view -H "${input_unpaired}" |
+      samtools view -b -o "${output_unpaired}" -
+  else
+    if [[ ! -f "${bam_aligned_unpaired}" || ${dont_overwrite} -eq 0 ]]; then
+      log "[ Aligning unpaired reads to T2T ]"
+      bwa mem -t "${threads}" -T 0 "${reference}" "${fastq_u}" \
+        | samtools view -@ "${threads}" -S -h -b -o "${bam_aligned_unpaired}" -
+      [[ -f "${bam_aligned_unpaired}" ]] || die "Failed to create aligned unpaired BAM."
+    fi
 
-  if [[ ! -f "${output_unpaired}" || ${dont_overwrite} -eq 0 ]]; then
-    log "[ Extracting unpaired unaligned reads ]"
-    time samtools view -@ "${threads}" -b -h -e '[AS]>35' \
-      -U >(samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${output_unpaired}" -) \
-      -o "${bam_decoys_unpaired}" \
-      "${bam_aligned_unpaired}"
+    if [[ ! -f "${output_unpaired}" || ${dont_overwrite} -eq 0 ]]; then
+      log "[ Extracting unpaired unaligned reads ]"
+      time samtools view -@ "${threads}" -b -h -e '[AS]>35' \
+        -U >(samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${output_unpaired}" -) \
+        -o "${bam_decoys_unpaired}" \
+        "${bam_aligned_unpaired}"
 
-    if [[ -n "${decoys_to_mask}" ]]; then
-      log "[ Extracting unpaired decoy-overlap reads for merge ]"
-      time samtools view -@ "${threads}" -b -h -e '[AS]>35' "${L_ARG[@]}" \
-        "${bam_aligned_unpaired}" \
-        | samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${bam_decoys_unpaired}" -
+      if [[ -n "${decoys_to_mask}" ]]; then
+        log "[ Extracting unpaired decoy-overlap reads for merge ]"
+        time samtools view -@ "${threads}" -b -h -e '[AS]>35' "${L_ARG[@]}" \
+          "${bam_aligned_unpaired}" \
+          | samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${bam_decoys_unpaired}" -
 
-      if [[ -s "${bam_decoys_unpaired}" ]]; then
-        local tmp_merge_u="${output_unpaired}.tmp.merge.bam"
-        log "[ Merging unpaired decoy-overlap reads into output ]"
-        time samtools cat -o "${tmp_merge_u}" "${output_unpaired}" "${bam_decoys_unpaired}"
-        mv -f "${tmp_merge_u}" "${output_unpaired}"
+        if [[ -s "${bam_decoys_unpaired}" ]]; then
+          local tmp_merge_u="${output_unpaired}.tmp.merge.bam"
+          log "[ Merging unpaired decoy-overlap reads into output ]"
+          time samtools cat -o "${tmp_merge_u}" "${output_unpaired}" "${bam_decoys_unpaired}"
+          mv -f "${tmp_merge_u}" "${output_unpaired}"
+        fi
       fi
     fi
   fi
@@ -275,8 +291,16 @@ HLP
   samtools flagstat --output-fmt tsv "${output_paired}" > "${flagstat_unaligned_paired}" || true
   samtools flagstat --output-fmt tsv "${output_unpaired}" > "${flagstat_unaligned_unpaired}" || true
 
-  bam_check_or_die "${output_paired}" "t2tfilter: final paired"
-  bam_check_or_die "${output_unpaired}" "t2tfilter: final unpaired"
+  if [[ "${paired_input_records}" -eq 0 ]]; then
+    ubam_check_or_die "${output_paired}" "t2tfilter: empty final paired"
+  else
+    bam_check_or_die "${output_paired}" "t2tfilter: final paired"
+  fi
+  if [[ "${unpaired_input_records}" -eq 0 ]]; then
+    ubam_check_or_die "${output_unpaired}" "t2tfilter: empty final unpaired"
+  else
+    bam_check_or_die "${output_unpaired}" "t2tfilter: final unpaired"
+  fi
 
   if [[ ${keep_intermediate} -eq 0 ]]; then
     log "Removing intermediate FASTQs and aligned BAMs (use --keep-intermediate to retain):"

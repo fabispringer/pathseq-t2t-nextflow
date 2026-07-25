@@ -307,16 +307,39 @@ HLP
     ((${#psfilterspark_args_ary[@]})) && unaligned_filter_cmd+=("${psfilterspark_args_ary[@]}")
     time "${unaligned_filter_cmd[@]}"
 
+    [[ -f "${filter_metrics_unaligned}" ]] ||
+      die "Unaligned PathSeqFilterSpark failed (no metrics)."
+    IFS=$'\t' read -r unaln_final_paired unaln_final_unpaired < <(
+      awk 'NF && $1 ~ /^[0-9]+$/ {print $6 "\t" $7; exit}' "${filter_metrics_unaligned}"
+    )
+    [[ "${unaln_final_paired:-}" =~ ^[0-9]+$ ]] ||
+      die "Could not parse FINAL_PAIRED_READS from ${filter_metrics_unaligned}"
+    [[ "${unaln_final_unpaired:-}" =~ ^[0-9]+$ ]] ||
+      die "Could not parse FINAL_UNPAIRED_READS from ${filter_metrics_unaligned}"
+    log "Unaligned metrics: FINAL_PAIRED_READS=${unaln_final_paired} FINAL_UNPAIRED_READS=${unaln_final_unpaired}"
+
     if [[ -f "${bam_paired_unaligned_filt}.sbi" ]]; then
       ubam_check_or_die "${bam_paired_unaligned_filt}"   "qcfilter: unaligned paired"
+    elif [[ "${unaln_final_paired}" -eq 0 ]]; then
+      log "No paired reads passed qcfilter; creating a header-only paired BAM"
+      rm -f "${bam_paired_unaligned_filt}"
+      samtools view -H "${bam_input_unaligned}" |
+        samtools view -b -o "${bam_paired_unaligned_filt}" -
+      ubam_check_or_die "${bam_paired_unaligned_filt}" "qcfilter: empty unaligned paired"
     else
-      die "Expected qcfilter output missing .sbi: ${bam_paired_unaligned_filt}.sbi"
+      die "FINAL_PAIRED_READS=${unaln_final_paired} but qcfilter output missing .sbi: ${bam_paired_unaligned_filt}.sbi"
     fi
 
     if [[ -f "${bam_unpaired_unaligned_filt}.sbi" ]]; then
       ubam_check_or_die "${bam_unpaired_unaligned_filt}" "qcfilter: unaligned unpaired"
+    elif [[ "${unaln_final_unpaired}" -eq 0 ]]; then
+      log "No unpaired reads passed qcfilter; creating a header-only unpaired BAM"
+      rm -f "${bam_unpaired_unaligned_filt}"
+      samtools view -H "${bam_input_unaligned}" |
+        samtools view -b -o "${bam_unpaired_unaligned_filt}" -
+      ubam_check_or_die "${bam_unpaired_unaligned_filt}" "qcfilter: empty unaligned unpaired"
     else
-      die "Expected qcfilter output missing .sbi: ${bam_unpaired_unaligned_filt}.sbi"
+      die "FINAL_UNPAIRED_READS=${unaln_final_unpaired} but qcfilter output missing .sbi: ${bam_unpaired_unaligned_filt}.sbi"
     fi
   fi
 

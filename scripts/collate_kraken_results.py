@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 
@@ -20,6 +21,21 @@ RANKS = {
     "genus": "G",
     "species": "S",
 }
+
+
+def normalize_count(value: str, path: Path, tax_id: str, field: str) -> str:
+    try:
+        number = Decimal(value)
+    except InvalidOperation as error:
+        raise ValueError(
+            f"{path}: invalid {field} count for tax ID {tax_id}: {value!r}"
+        ) from error
+    if not number.is_finite() or number < 0 or number != number.to_integral_value():
+        raise ValueError(
+            f"{path}: {field} count for tax ID {tax_id} must be a "
+            f"nonnegative integer, got {value!r}"
+        )
+    return str(int(number))
 
 
 def sample_id(path: Path) -> str:
@@ -54,6 +70,20 @@ def read_sample(path: Path, taxonomy: dict[str, dict[str, str]]) -> dict[str, di
         tax_id = row["tax_id"]
         if tax_id in indexed:
             raise ValueError(f"{path}: duplicate tax ID {tax_id}")
+        row["reads_clade"] = normalize_count(
+            row["reads_clade"], path, tax_id, "reads_clade"
+        )
+        row["reads_taxon"] = normalize_count(
+            row["reads_taxon"], path, tax_id, "reads_taxon"
+        )
+        try:
+            float(row["reads_clade_per_million"])
+            float(row["reads_taxon_per_million"])
+            float(row["pct_reads"])
+        except ValueError as error:
+            raise ValueError(
+                f"{path}: invalid RPM or percentage for tax ID {tax_id}"
+            ) from error
         if tax_id == "0" and tax_id not in taxonomy:
             if row["name"] != "unclassified" or row["rank"] != "U":
                 raise ValueError(f"{path}: unexpected representation of unclassified tax ID 0")
@@ -68,11 +98,6 @@ def read_sample(path: Path, taxonomy: dict[str, dict[str, str]]) -> dict[str, di
                 f"result=({row['name']!r}, {row['rank']!r}), "
                 f"database=({taxon['name']!r}, {taxon['rank']!r})"
             )
-        try:
-            int(row["reads_clade"])
-            float(row["reads_clade_per_million"])
-        except ValueError as error:
-            raise ValueError(f"{path}: invalid clade count or RPM for tax ID {tax_id}") from error
         indexed[tax_id] = row
     return indexed
 
