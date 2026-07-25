@@ -28,39 +28,6 @@ def normalizedNames(value) {
     .findAll { it }
 }
 
-process WRITE_WORKFLOW_VERSION {
-  tag 'workflow version'
-  label 'summarize'
-  publishDir "${params.outdir}/pipeline_info", mode: 'copy'
-
-  input:
-  val version_info
-
-  output:
-  path 'workflow_version.tsv'
-
-  script:
-  """
-  git_commit='${version_info.git_commit}'
-  git_description='${version_info.git_revision}'
-  if command -v git >/dev/null 2>&1 && git -C '${projectDir}' rev-parse --git-dir >/dev/null 2>&1; then
-    git_commit="\$(git -C '${projectDir}' rev-parse HEAD)"
-    git_description="\$(git -C '${projectDir}' describe --tags --always --dirty)"
-  fi
-
-  cat > workflow_version.tsv <<EOF
-  field\tvalue
-  workflow_name\t${version_info.workflow_name}
-  workflow_version\t${version_info.workflow_version}
-  git_commit\t\${git_commit}
-  git_description\t\${git_description}
-  requested_revision\t${version_info.git_revision}
-  repository\t${version_info.repository}
-  nextflow_version\t${version_info.nextflow_version}
-  EOF
-  """
-}
-
 process STAGE_FASTQ_INPUT {
   tag "$sample_id"
   label 'stage'
@@ -321,29 +288,62 @@ process ALIGN_BWA {
     test -s '${params.references.grch38_fasta}'.\${suffix}
   done
 
-  bwa mem \\
-    -t ${task.cpus} \\
-    -R '@RG\\tID:${sample_id}\\tSM:${sample_id}\\tPL:${params.read_group_platform}' \\
-    '${params.references.grch38_fasta}' \\
-    ${r1} \\
-    ${r2} \\
-    | samtools sort \\
-        -@ ${task.cpus} \\
-        -o ${sample_id}.paired.sorted.bam \\
-        -
+  has_paired=false
+  has_unpaired=false
 
-  unpaired_bytes="\$(gzip -l ${unpaired} | awk 'NR == 2 { print \$2 }')"
-  if [[ "\${unpaired_bytes:-0}" -gt 0 ]]; then
+  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${r1}; then
+    r1_has_data=true
+  else
+    r1_has_data=false
+  fi
+  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${r2}; then
+    r2_has_data=true
+  else
+    r2_has_data=false
+  fi
+  if [[ "\${r1_has_data}" == true && "\${r2_has_data}" == true ]]; then
+    has_paired=true
+  elif [[ "\${r1_has_data}" != "\${r2_has_data}" ]]; then
+    echo "ERROR: R1/R2 content mismatch for ${sample_id}: R1_has_data=\${r1_has_data}, R2_has_data=\${r2_has_data}" >&2
+    exit 1
+  fi
+  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${unpaired}; then
+    has_unpaired=true
+  fi
+  if [[ "\${has_paired}" == false && "\${has_unpaired}" == false ]]; then
+    echo "ERROR: No reads remain after QC for ${sample_id}" >&2
+    exit 1
+  fi
+
+  if [[ "\${has_paired}" == true ]]; then
+    bwa mem \\
+      -t ${task.cpus} \\
+      -R '@RG\\tID:${sample_id}\\tSM:${sample_id}\\tPL:${params.read_group_platform}' \\
+      '${params.references.grch38_fasta}' \\
+      ${r1} \\
+      ${r2} \\
+      | samtools sort \\
+          -@ ${task.cpus} \\
+          -o ${sample_id}.paired.sorted.bam \\
+          -
+  fi
+
+  if [[ "\${has_unpaired}" == true ]]; then
     bwa mem \\
       -t ${task.cpus} \\
       -R '@RG\\tID:${sample_id}\\tSM:${sample_id}\\tPL:${params.read_group_platform}' \\
       '${params.references.grch38_fasta}' \\
       ${unpaired} \\
       | samtools sort -@ ${task.cpus} -o ${sample_id}.unpaired.sorted.bam -
+  fi
+
+  if [[ "\${has_paired}" == true && "\${has_unpaired}" == true ]]; then
     samtools merge -@ ${task.cpus} -f ${sample_id}.bwa.sorted.bam \\
       ${sample_id}.paired.sorted.bam ${sample_id}.unpaired.sorted.bam
-  else
+  elif [[ "\${has_paired}" == true ]]; then
     mv ${sample_id}.paired.sorted.bam ${sample_id}.bwa.sorted.bam
+  else
+    mv ${sample_id}.unpaired.sorted.bam ${sample_id}.bwa.sorted.bam
   fi
 
   samtools index -@ ${task.cpus} ${sample_id}.bwa.sorted.bam
@@ -383,39 +383,71 @@ process ALIGN_STAR {
 
   mkdir -p star_tmp star_logs
   prefix="star_tmp/${sample_id}"
+  single_prefix="star_tmp/${sample_id}.single."
+  has_paired=false
+  has_unpaired=false
 
-  STAR \\
-    --runThreadN ${task.cpus} \\
-    --genomeDir '${params.references.star_index}' \\
-    --readFilesIn ${r1} ${r2} \\
-    --readFilesCommand zcat \\
-    --outFileNamePrefix "\${prefix}" \\
-    --outReadsUnmapped Fastx \\
-    --outSAMtype BAM SortedByCoordinate \\
-    --quantMode TranscriptomeSAM GeneCounts \\
-    --outSAMattrRGline 'ID:${sample_id}' 'SM:${sample_id}' 'PL:${params.read_group_platform}' \\
-    --twopassMode Basic
+  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${r1}; then
+    r1_has_data=true
+  else
+    r1_has_data=false
+  fi
+  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${r2}; then
+    r2_has_data=true
+  else
+    r2_has_data=false
+  fi
+  if [[ "\${r1_has_data}" == true && "\${r2_has_data}" == true ]]; then
+    has_paired=true
+  elif [[ "\${r1_has_data}" != "\${r2_has_data}" ]]; then
+    echo "ERROR: R1/R2 content mismatch for ${sample_id}: R1_has_data=\${r1_has_data}, R2_has_data=\${r2_has_data}" >&2
+    exit 1
+  fi
+  if python3 -c 'import gzip, sys; sys.exit(0 if gzip.open(sys.argv[1], "rb").read(1) else 1)' ${unpaired}; then
+    has_unpaired=true
+  fi
+  if [[ "\${has_paired}" == false && "\${has_unpaired}" == false ]]; then
+    echo "ERROR: No reads remain after QC for ${sample_id}" >&2
+    exit 1
+  fi
 
-  test -s "\${prefix}Aligned.sortedByCoord.out.bam"
-  test -s "\${prefix}Unmapped.out.mate1"
-  test -s "\${prefix}Unmapped.out.mate2"
+  if [[ "\${has_paired}" == true ]]; then
+    STAR \\
+      --runThreadN ${task.cpus} \\
+      --genomeDir '${params.references.star_index}' \\
+      --readFilesIn ${r1} ${r2} \\
+      --readFilesCommand zcat \\
+      --outFileNamePrefix "\${prefix}" \\
+      --outReadsUnmapped Fastx \\
+      --outSAMtype BAM SortedByCoordinate \\
+      --quantMode TranscriptomeSAM GeneCounts \\
+      --outSAMattrRGline 'ID:${sample_id}' 'SM:${sample_id}' 'PL:${params.read_group_platform}' \\
+      --twopassMode Basic
 
-  '${projectDir}/scripts/write_star_primary_flagstat.sh' \\
-    --star-log "\${prefix}Log.final.out" \\
-    --output "${sample_id}.flagstat.tsv"
+    test -s "\${prefix}Aligned.sortedByCoord.out.bam"
+    test -e "\${prefix}Unmapped.out.mate1"
+    test -e "\${prefix}Unmapped.out.mate2"
 
-  java -jar '${params.tools.picard_jar}' FastqToSam \\
-    F1="\${prefix}Unmapped.out.mate1" \\
-    F2="\${prefix}Unmapped.out.mate2" \\
-    O="${sample_id}.paired.unaligned.bam" \\
-    SM="${sample_id}" \\
-    RG="${sample_id}" \\
-    PL="${params.read_group_platform}" \\
-    SORT_ORDER=queryname
+    if [[ -s "\${prefix}Unmapped.out.mate1" && -s "\${prefix}Unmapped.out.mate2" ]]; then
+      java -jar '${params.tools.picard_jar}' FastqToSam \\
+        F1="\${prefix}Unmapped.out.mate1" \\
+        F2="\${prefix}Unmapped.out.mate2" \\
+        O="${sample_id}.paired.unaligned.bam" \\
+        SM="${sample_id}" \\
+        RG="${sample_id}" \\
+        PL="${params.read_group_platform}" \\
+        SORT_ORDER=queryname
+    elif [[ ! -s "\${prefix}Unmapped.out.mate1" && ! -s "\${prefix}Unmapped.out.mate2" ]]; then
+      printf '@HD\\tVN:1.6\\tSO:queryname\\n@RG\\tID:%s\\tSM:%s\\tPL:%s\\n' \\
+        '${sample_id}' '${sample_id}' '${params.read_group_platform}' \\
+        | samtools view -b -o "${sample_id}.paired.unaligned.bam" -
+    else
+      echo "ERROR: STAR produced unmatched paired unmapped FASTQs for ${sample_id}" >&2
+      exit 1
+    fi
+  fi
 
-  unpaired_bytes="\$(gzip -l ${unpaired} | awk 'NR == 2 { print \$2 }')"
-  if [[ "\${unpaired_bytes:-0}" -gt 0 ]]; then
-    single_prefix="star_tmp/${sample_id}.single."
+  if [[ "\${has_unpaired}" == true ]]; then
     STAR \\
       --runThreadN ${task.cpus} \\
       --genomeDir '${params.references.star_index}' \\
@@ -424,14 +456,27 @@ process ALIGN_STAR {
       --outFileNamePrefix "\${single_prefix}" \\
       --outReadsUnmapped Fastx \\
       --outSAMtype BAM SortedByCoordinate \\
+      --quantMode TranscriptomeSAM GeneCounts \\
       --outSAMattrRGline 'ID:${sample_id}' 'SM:${sample_id}' 'PL:${params.read_group_platform}' \\
       --twopassMode Basic
 
-    java -jar '${params.tools.picard_jar}' FastqToSam \\
-      F1="\${single_prefix}Unmapped.out.mate1" \\
-      O="${sample_id}.single.unaligned.bam" \\
-      SM="${sample_id}" RG="${sample_id}" PL="${params.read_group_platform}" \\
-      SORT_ORDER=queryname
+    test -s "\${single_prefix}Aligned.sortedByCoord.out.bam"
+    test -e "\${single_prefix}Unmapped.out.mate1"
+
+    if [[ -s "\${single_prefix}Unmapped.out.mate1" ]]; then
+      java -jar '${params.tools.picard_jar}' FastqToSam \\
+        F1="\${single_prefix}Unmapped.out.mate1" \\
+        O="${sample_id}.single.unaligned.bam" \\
+        SM="${sample_id}" RG="${sample_id}" PL="${params.read_group_platform}" \\
+        SORT_ORDER=queryname
+    else
+      printf '@HD\\tVN:1.6\\tSO:queryname\\n@RG\\tID:%s\\tSM:%s\\tPL:%s\\n' \\
+        '${sample_id}' '${sample_id}' '${params.read_group_platform}' \\
+        | samtools view -b -o "${sample_id}.single.unaligned.bam" -
+    fi
+  fi
+
+  if [[ "\${has_paired}" == true && "\${has_unpaired}" == true ]]; then
     java -jar '${params.tools.picard_jar}' MergeSamFiles \\
       I="${sample_id}.paired.unaligned.bam" \\
       I="${sample_id}.single.unaligned.bam" \\
@@ -441,35 +486,58 @@ process ALIGN_STAR {
       "\${prefix}Aligned.sortedByCoord.out.bam" \\
       "\${single_prefix}Aligned.sortedByCoord.out.bam"
     '${projectDir}/scripts/write_star_primary_flagstat.sh' \\
-      --star-log "\${prefix}Log.final.out" \\
+      --paired-log "\${prefix}Log.final.out" \\
       --single-log "\${single_prefix}Log.final.out" \\
       --output "${sample_id}.flagstat.tsv"
-  else
+    python3 '${projectDir}/scripts/merge_star_gene_counts.py' \\
+      --input "\${prefix}ReadsPerGene.out.tab" \\
+      --input "\${single_prefix}ReadsPerGene.out.tab" \\
+      --output "${sample_id}.star.ReadsPerGene.out.tsv"
+  elif [[ "\${has_paired}" == true ]]; then
     mv ${sample_id}.paired.unaligned.bam ${sample_id}.prefilter.unaligned.bam
     mv "\${prefix}Aligned.sortedByCoord.out.bam" ${sample_id}.star.sorted.bam
+    '${projectDir}/scripts/write_star_primary_flagstat.sh' \\
+      --paired-log "\${prefix}Log.final.out" \\
+      --output "${sample_id}.flagstat.tsv"
+    cp "\${prefix}ReadsPerGene.out.tab" "${sample_id}.star.ReadsPerGene.out.tsv"
+  else
+    mv ${sample_id}.single.unaligned.bam ${sample_id}.prefilter.unaligned.bam
+    mv "\${single_prefix}Aligned.sortedByCoord.out.bam" ${sample_id}.star.sorted.bam
+    '${projectDir}/scripts/write_star_primary_flagstat.sh' \\
+      --single-log "\${single_prefix}Log.final.out" \\
+      --output "${sample_id}.flagstat.tsv"
+    cp "\${single_prefix}ReadsPerGene.out.tab" "${sample_id}.star.ReadsPerGene.out.tsv"
   fi
 
   samtools view -H ${sample_id}.prefilter.unaligned.bam >/dev/null
   samtools index -@ ${task.cpus} ${sample_id}.star.sorted.bam
 
-  for star_output in \\
-    Log.final.out \\
-    Log.out \\
-    Log.progress.out \\
-    SJ.out.tab \\
-    ReadsPerGene.out.tab \\
-    Aligned.toTranscriptome.out.bam \\
-    Unmapped.out.mate1 \\
-    Unmapped.out.mate2; do
-    if [[ -f "\${prefix}\${star_output}" ]]; then
-      mv "\${prefix}\${star_output}" "star_logs/${sample_id}.star.\${star_output}"
-    fi
-  done
+  if [[ "\${has_paired}" == true ]]; then
+    for star_output in \\
+      Log.final.out Log.out Log.progress.out SJ.out.tab ReadsPerGene.out.tab \\
+      Aligned.toTranscriptome.out.bam Unmapped.out.mate1 Unmapped.out.mate2; do
+      if [[ -f "\${prefix}\${star_output}" ]]; then
+        mv "\${prefix}\${star_output}" "star_logs/${sample_id}.star.\${star_output}"
+      fi
+    done
+  fi
+  if [[ "\${has_unpaired}" == true ]]; then
+    for star_output in \\
+      Log.final.out Log.out Log.progress.out SJ.out.tab ReadsPerGene.out.tab \\
+      Aligned.toTranscriptome.out.bam Unmapped.out.mate1; do
+      if [[ -f "\${single_prefix}\${star_output}" ]]; then
+        mv "\${single_prefix}\${star_output}" "star_logs/${sample_id}.star.single.\${star_output}"
+      fi
+    done
+  fi
 
   samtools quickcheck -v ${sample_id}.star.sorted.bam
   samtools flagstat --output-fmt tsv ${sample_id}.star.sorted.bam > ${sample_id}.host_alignment.flagstat.tsv
-  cp star_logs/${sample_id}.star.Log.final.out ${sample_id}.star.Log.final.out
-  cp star_logs/${sample_id}.star.ReadsPerGene.out.tab ${sample_id}.star.ReadsPerGene.out.tsv
+  if [[ "\${has_paired}" == true ]]; then
+    cp star_logs/${sample_id}.star.Log.final.out ${sample_id}.star.Log.final.out
+  else
+    cp star_logs/${sample_id}.star.single.Log.final.out ${sample_id}.star.Log.final.out
+  fi
   """
 }
 
@@ -807,16 +875,6 @@ process COLLATE_STAR_GENE_COUNTS {
 workflow {
   requireParam(params.outdir, 'outdir')
 
-  versionInfo = [
-    workflow_name: workflow.manifest.name ?: 'pathseq-t2t-nextflow',
-    workflow_version: workflow.manifest.version ?: 'unknown',
-    git_commit: workflow.commitId ?: 'unknown',
-    git_revision: workflow.revision ?: 'local-checkout',
-    repository: workflow.repository ?: 'local-checkout',
-    nextflow_version: workflow.nextflow.version ?: 'unknown'
-  ]
-  WRITE_WORKFLOW_VERSION(versionInfo)
-
   aligner = params.aligner.toString().toLowerCase()
   if (!(aligner in ['bwa', 'star'])) {
     throw new IllegalArgumentException("params.aligner must be 'bwa' or 'star', got: ${params.aligner}")
@@ -847,9 +905,35 @@ workflow {
     BAM_TO_FASTQ(STAGE_BAM_INPUT.out.bam)
     reads_ch = BAM_TO_FASTQ.out.reads
   } else {
-    readsGlob = "${sourceInputDir}/**/*_{R1,R2}.fastq.gz"
-    source_reads_ch = Channel.fromFilePairs(readsGlob, flat: false, checkIfExists: true)
-      .map { sample_id, reads -> tuple(sample_id, reads.collect { it.toString() }) }
+    readsGlob = "${sourceInputDir}/**/*_{R1,R2,1,2}.fastq.gz"
+    source_reads_ch = Channel.fromPath(readsGlob, checkIfExists: true)
+      .map { read ->
+        def matcher = read.name =~ /^(.*)_(R?[12])\.fastq\.gz$/
+        if (!matcher.matches()) {
+          throw new IllegalArgumentException("Could not parse FASTQ mate name: ${read}")
+        }
+        def sample_id = matcher[0][1]
+        def mate_token = matcher[0][2]
+        def convention = mate_token.startsWith('R') ? 'R1/R2' : '1/2'
+        def mate_number = mate_token[-1] as int
+        tuple(sample_id, convention, mate_number, read.toString())
+      }
+      .groupTuple(by: 0)
+      .map { sample_id, conventions, mate_numbers, read_paths ->
+        def unique_conventions = conventions.unique()
+        def sorted_mates = mate_numbers.sort(false)
+        if (unique_conventions.size() != 1 || sorted_mates != [1, 2] || read_paths.size() != 2) {
+          throw new IllegalArgumentException(
+            "Expected exactly one FASTQ pair for sample '${sample_id}' using either " +
+            "_R1/_R2 or _1/_2 naming; found conventions=${conventions}, mates=${mate_numbers}"
+          )
+        }
+        def ordered_reads = [mate_numbers, read_paths]
+          .transpose()
+          .sort { left, right -> left[0] <=> right[0] }
+          .collect { mate_and_path -> mate_and_path[1] }
+        tuple(sample_id, ordered_reads)
+      }
     STAGE_FASTQ_INPUT(source_reads_ch)
     reads_ch = STAGE_FASTQ_INPUT.out.reads
   }

@@ -1,24 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-star_log=""
+paired_log=""
 single_log=""
 output=""
 
 usage() {
   cat <<'EOF'
-Usage: write_star_primary_flagstat.sh --star-log <Log.final.out> [--single-log <Log.final.out>] --output <flagstat.tsv>
+Usage: write_star_primary_flagstat.sh [--paired-log <Log.final.out>] [--single-log <Log.final.out>] --output <flagstat.tsv>
 
 Writes the primary-read row expected by the upstream `pathseq-t2t summarize`
-command. For paired-end STAR input, "Number of input reads" is the number of
-read pairs, so the value is multiplied by two to obtain individual reads/mates.
-An optional single-end STAR log is added without multiplication.
+command. At least one STAR log is required. For paired-end STAR input, "Number
+of input reads" is the number of read pairs, so the value is multiplied by two
+to obtain individual reads/mates. Single-end STAR input is added without
+multiplication.
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --star-log) star_log="${2:?--star-log requires a path}"; shift 2 ;;
+    --paired-log) paired_log="${2:?--paired-log requires a path}"; shift 2 ;;
+    --star-log) paired_log="${2:?--star-log requires a path}"; shift 2 ;;
     --single-log) single_log="${2:?--single-log requires a path}"; shift 2 ;;
     --output) output="${2:?--output requires a path}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -26,8 +28,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ! -s "$star_log" ]]; then
-  echo "ERROR: Missing or empty STAR Log.final.out: ${star_log:-<unset>}" >&2
+if [[ -z "$paired_log" && -z "$single_log" ]]; then
+  echo "ERROR: At least one of --paired-log or --single-log is required" >&2
   exit 1
 fi
 if [[ -z "$output" ]]; then
@@ -35,22 +37,28 @@ if [[ -z "$output" ]]; then
   exit 1
 fi
 
-input_pairs="$(
-  awk -F '|' '
-    /Number of input reads/ {
-      gsub(/[[:space:]]/, "", $2)
-      print $2
-      exit
-    }
-  ' "$star_log"
-)"
-
-if [[ ! "$input_pairs" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: Could not parse Number of input reads from: $star_log" >&2
-  exit 1
+primary_reads=0
+if [[ -n "$paired_log" ]]; then
+  if [[ ! -s "$paired_log" ]]; then
+    echo "ERROR: Missing or empty paired-end STAR log: $paired_log" >&2
+    exit 1
+  fi
+  input_pairs="$(
+    awk -F '|' '
+      /Number of input reads/ {
+        gsub(/[[:space:]]/, "", $2)
+        print $2
+        exit
+      }
+    ' "$paired_log"
+  )"
+  if [[ ! "$input_pairs" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: Could not parse Number of input reads from: $paired_log" >&2
+    exit 1
+  fi
+  primary_reads=$((input_pairs * 2))
 fi
 
-primary_reads=$((input_pairs * 2))
 if [[ -n "$single_log" ]]; then
   if [[ ! -s "$single_log" ]]; then
     echo "ERROR: Missing or empty single-end STAR log: $single_log" >&2
