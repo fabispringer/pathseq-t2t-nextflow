@@ -1,3 +1,43 @@
+_read_pathseq_final_counts() {
+  local metrics_file="$1"
+
+  awk -F '\t' '
+    {
+      paired_col = 0
+      unpaired_col = 0
+
+      for (i = 1; i <= NF; i++) {
+        header = $i
+        sub(/\r$/, "", header)
+        if (header == "FINAL_PAIRED_READS") {
+          paired_col = i
+        } else if (header == "FINAL_UNPAIRED_READS") {
+          unpaired_col = i
+        }
+      }
+
+      if (paired_col && unpaired_col) {
+        if (getline <= 0 || paired_col > NF || unpaired_col > NF) {
+          exit 1
+        }
+        paired_value = $paired_col
+        unpaired_value = $unpaired_col
+        sub(/\r$/, "", paired_value)
+        sub(/\r$/, "", unpaired_value)
+        print paired_value "\t" unpaired_value
+        found = 1
+        exit
+      }
+    }
+
+    END {
+      if (!found) {
+        exit 1
+      }
+    }
+  ' "${metrics_file}"
+}
+
 cmd_qcfilter() {
   # ---------- Defaults & arg parsing ----------
   local input_unaligned="" input_decoys="" paired_out="" unpaired_out=""
@@ -309,9 +349,11 @@ HLP
 
     [[ -f "${filter_metrics_unaligned}" ]] ||
       die "Unaligned PathSeqFilterSpark failed (no metrics)."
-    IFS=$'\t' read -r unaln_final_paired unaln_final_unpaired < <(
-      awk 'NF && $1 ~ /^[0-9]+$/ {print $6 "\t" $7; exit}' "${filter_metrics_unaligned}"
-    )
+    if ! IFS=$'\t' read -r unaln_final_paired unaln_final_unpaired < <(
+      _read_pathseq_final_counts "${filter_metrics_unaligned}"
+    ); then
+      die "Could not parse final read counts from ${filter_metrics_unaligned}"
+    fi
     [[ "${unaln_final_paired:-}" =~ ^[0-9]+$ ]] ||
       die "Could not parse FINAL_PAIRED_READS from ${filter_metrics_unaligned}"
     [[ "${unaln_final_unpaired:-}" =~ ^[0-9]+$ ]] ||
@@ -345,9 +387,15 @@ HLP
 
   # Collect final number of paired/unpaired reads
   if [[ -n "${filter_metrics_unaligned:-}" && -f "${filter_metrics_unaligned}" ]]; then
-    IFS=$'\t' read -r unaln_final_paired unaln_final_unpaired < <(
-      awk 'NF && $1 ~ /^[0-9]+$/ {print $6 "\t" $7; exit}' "${filter_metrics_unaligned}"
-    )
+    if ! IFS=$'\t' read -r unaln_final_paired unaln_final_unpaired < <(
+      _read_pathseq_final_counts "${filter_metrics_unaligned}"
+    ); then
+      die "Could not parse final read counts from ${filter_metrics_unaligned}"
+    fi
+    [[ "${unaln_final_paired:-}" =~ ^[0-9]+$ ]] ||
+      die "Could not parse FINAL_PAIRED_READS from ${filter_metrics_unaligned}"
+    [[ "${unaln_final_unpaired:-}" =~ ^[0-9]+$ ]] ||
+      die "Could not parse FINAL_UNPAIRED_READS from ${filter_metrics_unaligned}"
     log "Unaligned metrics: FINAL_PAIRED_READS=${unaln_final_paired:-0} FINAL_UNPAIRED_READS=${unaln_final_unpaired:-0}"
   fi
 
@@ -355,9 +403,15 @@ HLP
   # Read FINAL_PAIRED/UNPAIRED_READS from decoy filter metrics (if present)
   local decoys_final_paired=0 decoys_final_unpaired=0
   if [[ ${have_decoys} -eq 1 && -n "${filter_metrics_decoys:-}" && -f "${filter_metrics_decoys}" ]]; then
-    read -r decoys_final_paired decoys_final_unpaired < <(
-      awk 'NF && $1 ~ /^[0-9]+$/ {print $6, $7; exit}' "${filter_metrics_decoys}"
-    )
+    if ! IFS=$'\t' read -r decoys_final_paired decoys_final_unpaired < <(
+      _read_pathseq_final_counts "${filter_metrics_decoys}"
+    ); then
+      die "Could not parse final read counts from ${filter_metrics_decoys}"
+    fi
+    [[ "${decoys_final_paired:-}" =~ ^[0-9]+$ ]] ||
+      die "Could not parse FINAL_PAIRED_READS from ${filter_metrics_decoys}"
+    [[ "${decoys_final_unpaired:-}" =~ ^[0-9]+$ ]] ||
+      die "Could not parse FINAL_UNPAIRED_READS from ${filter_metrics_decoys}"
     log "Decoy metrics: FINAL_PAIRED_READS=${decoys_final_paired} FINAL_UNPAIRED_READS=${decoys_final_unpaired}"
   fi
 

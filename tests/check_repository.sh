@@ -6,6 +6,7 @@ cd "${repo_root}"
 
 bash -n scripts/*.sh overrides/*.sh
 python3 -m py_compile scripts/*.py
+bash tests/test_qcfilter_metrics.sh
 bash tests/test_write_star_primary_flagstat.sh
 python3 tests/test_merge_star_gene_counts.py
 python3 tests/test_collate_kraken_results.py
