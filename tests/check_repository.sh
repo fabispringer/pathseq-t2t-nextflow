@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
-bash -n scripts/*.sh overrides/*.sh
+bash -n run.sh run_lsf.sh scripts/*.sh overrides/*.sh
 python3 -m py_compile scripts/*.py
 bash tests/test_qcfilter_metrics.sh
 bash tests/test_write_star_primary_flagstat.sh
@@ -28,6 +28,7 @@ required=(
   LICENSE
   THIRD_PARTY_NOTICES.md
   CITATION.cff
+  run_lsf.sh
   scripts/setup_pathseq_t2t.sh
 )
 for file in "${required[@]}"; do
@@ -57,10 +58,21 @@ run_version="$(
     }
   ' run.sh
 )"
+run_lsf_version="$(
+  awk -F'"' '
+    /^readonly WORKFLOW_VERSION=/ {
+      value=$2
+      sub(/^v/, "", value)
+      print value
+      exit
+    }
+  ' run_lsf.sh
+)"
 for version_source in \
   "CITATION.cff:${citation_version}" \
   "nextflow.config:${manifest_version}" \
-  "run.sh:${run_version}"; do
+  "run.sh:${run_version}" \
+  "run_lsf.sh:${run_lsf_version}"; do
   source_file="${version_source%%:*}"
   observed_version="${version_source#*:}"
   [[ "${observed_version}" == "${expected_version}" ]] || {
@@ -68,5 +80,32 @@ for version_source in \
     exit 1
   }
 done
+
+expected_nextflow_version=">=26.04.6"
+manifest_nextflow_version="$(
+  awk -F"'" '
+    /^[[:space:]]*nextflowVersion[[:space:]]*=/ {
+      print $2
+      exit
+    }
+  ' nextflow.config
+)"
+[[ "${manifest_nextflow_version}" == "${expected_nextflow_version}" ]] || {
+  echo "ERROR: nextflow.config requires '${manifest_nextflow_version}', expected '${expected_nextflow_version}'." >&2
+  exit 1
+}
+
+grep -Fq "params.lsf = [" nextflow.config || {
+  echo "ERROR: nextflow.config is missing params.lsf." >&2
+  exit 1
+}
+grep -Fq "process.executor = 'lsf'" nextflow.config || {
+  echo "ERROR: nextflow.config is missing the LSF execution profile." >&2
+  exit 1
+}
+grep -Eq '^lsf:$' parameters.example.yaml || {
+  echo "ERROR: parameters.example.yaml is missing the LSF parameter section." >&2
+  exit 1
+}
 
 echo "Repository checks passed."

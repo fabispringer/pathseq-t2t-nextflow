@@ -19,7 +19,7 @@ OUTDIR="/path/to/results"
 
 # Workflow paths and version.
 readonly REPO_ROOT="/path/to/pathseq-t2t-nextflow"
-readonly WORKFLOW_VERSION="v0.1.1"
+readonly WORKFLOW_VERSION="v0.3.0"
 readonly CONFIG_FILE="${REPO_ROOT}/nextflow.config"
 readonly PARAMS_FILE="/path/to/parameters.lsf.yaml"
 readonly PIPELINE_INFO_DIR="${OUTDIR}/pipeline_info"
