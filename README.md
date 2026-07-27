@@ -32,7 +32,7 @@ it for production analysis.
 
 ## Requirements
 
-- Linux or an HPC cluster with SLURM or LSF
+- Linux or an HPC cluster with SLURM
 - Conda/Mamba
 - Git
 - reference files and classifier databases supplied by the user
@@ -56,7 +56,11 @@ fixes:
 ```
 
 The generated checkout lives at `pathseq-t2t/upstream/` and is ignored by Git.
-The setup script never modifies another PathSeq-T2T installation.
+The setup script never modifies another PathSeq-T2T installation. Reviewed
+command sources live under `overrides/`; setup copies them over the matching
+commands in the generated runtime. See
+[docs/upstream-modifications.md](docs/upstream-modifications.md) for the exact
+source-to-runtime mapping and behavior changes.
 
 Prepare the required reference databases in an external data location:
 
@@ -86,24 +90,13 @@ T2T references, classifier database, Picard JAR, and cluster queue as required.
 Paths in `parameters.yaml` may be absolute; the file is ignored by Git to help
 avoid publishing local paths accidentally.
 
-Input discovery is recursive. FASTQ mode expects paired files ending in
-`_R1.fastq.gz` and `_R2.fastq.gz`. BAM mode uses the configured `bam_suffix`.
+Input discovery is recursive. FASTQ mode accepts paired files ending in either
+`_R1.fastq.gz`/`_R2.fastq.gz` or `_1.fastq.gz`/`_2.fastq.gz`. Both conventions
+are normalized to staged `_R1.fastq.gz`/`_R2.fastq.gz` names. BAM mode uses the
+configured `bam_suffix`. BAM input may contain paired, single-end, or mixed
+primary records.
 
 ## Running
-
-For reproducible analyses, execute an immutable release tag rather than the
-moving `main` branch:
-
-```bash
-git fetch --tags
-git checkout --detach v0.2.0
-git describe --tags --exact-match
-```
-
-The Conda environment remains named `pathseq-t2t-nextflow`; it does not need a
-version-specific prefix. Every run writes `pipeline_info/workflow_version.tsv`
-with the workflow version, Git commit and revision, repository, and Nextflow
-version.
 
 SLURM:
 
@@ -114,21 +107,6 @@ nextflow run . \
   -work-dir /path/to/scratch/work \
   -resume
 ```
-
-LSF:
-
-```bash
-nextflow run . \
-  -params-file parameters.yaml \
-  -profile lsf \
-  -work-dir /path/to/shared/work \
-  -resume
-```
-
-Set `lsf.queue`, `lsf.project`, and `lsf.max_jobs` in `parameters.yaml`.
-Nextflow submits each process through `bsub` using the process-specific CPU,
-memory, and wall-time settings. See [docs/nextflow.md](docs/nextflow.md) for
-LSF memory semantics and the optional controller-job wrapper.
 
 For a direct Bash-run local execution, edit the three paths at the top of
 `run.sh` and run:
@@ -166,8 +144,9 @@ input behavior, and operational guidance.
 After all samples finish, the workflow generates cohort-level read-count QC
 tables. STAR runs additionally produce unstranded, forward, and reverse gene
 count matrices. When Kraken is enabled, the workflow generates bacterial and
-archaeal phylum, class, order, family, genus, and species count and RPM
-matrices using taxonomy from the exact configured Kraken database.
+archaeal phylum/class/order/family/genus/species count and RPM matrices using
+taxonomy from the exact
+configured Kraken database.
 
 For compatibility with the liver-atlas bulk analysis, Kraken matrices use the
 row label `Bacteria` for the sum of the Bacteria and Archaea domain-level clade
