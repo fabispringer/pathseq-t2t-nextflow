@@ -41,6 +41,8 @@ process WRITE_WORKFLOW_VERSION {
 
   script:
   """
+  set -euo pipefail
+
   git_commit='${version_info.git_commit}'
   git_description='${version_info.git_revision}'
   if command -v git >/dev/null 2>&1 && git -C '${projectDir}' rev-parse --git-dir >/dev/null 2>&1; then
@@ -48,16 +50,16 @@ process WRITE_WORKFLOW_VERSION {
     git_description="\$(git -C '${projectDir}' describe --tags --always --dirty)"
   fi
 
-  cat > workflow_version.tsv <<EOF
-  field\tvalue
-  workflow_name\t${version_info.workflow_name}
-  workflow_version\t${version_info.workflow_version}
-  git_commit\t\${git_commit}
-  git_description\t\${git_description}
-  requested_revision\t${version_info.git_revision}
-  repository\t${version_info.repository}
-  nextflow_version\t${version_info.nextflow_version}
-  EOF
+  printf '%s\\t%s\\n' \
+    'field' 'value' \
+    'workflow_name' '${version_info.workflow_name}' \
+    'workflow_version' '${version_info.workflow_version}' \
+    'git_commit' "\${git_commit}" \
+    'git_description' "\${git_description}" \
+    'requested_revision' '${version_info.git_revision}' \
+    'repository' '${version_info.repository}' \
+    'nextflow_version' '${version_info.nextflow_version}' \
+    > workflow_version.tsv
   """
 }
 
