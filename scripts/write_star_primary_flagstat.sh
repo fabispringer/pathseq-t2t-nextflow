@@ -20,7 +20,6 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --paired-log) paired_log="${2:?--paired-log requires a path}"; shift 2 ;;
-    --star-log) paired_log="${2:?--star-log requires a path}"; shift 2 ;;
     --single-log) single_log="${2:?--single-log requires a path}"; shift 2 ;;
     --output) output="${2:?--output requires a path}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;

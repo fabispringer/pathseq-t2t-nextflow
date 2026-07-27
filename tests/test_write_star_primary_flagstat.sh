@@ -42,10 +42,12 @@ assert_primary_reads 3 "${test_dir}/single.tsv"
   --output "${test_dir}/mixed.tsv"
 assert_primary_reads 23 "${test_dir}/mixed.tsv"
 
-"$script" \
+if "$script" \
   --star-log "${test_dir}/paired.log" \
-  --output "${test_dir}/legacy.tsv"
-assert_primary_reads 20 "${test_dir}/legacy.tsv"
+  --output "${test_dir}/legacy.tsv" >/dev/null 2>&1; then
+  echo "ERROR: Expected removed --star-log option to fail" >&2
+  exit 1
+fi
 
 if "$script" --output "${test_dir}/missing.tsv" >/dev/null 2>&1; then
   echo "ERROR: Expected invocation without STAR logs to fail" >&2

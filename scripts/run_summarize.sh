@@ -6,19 +6,22 @@ PATHSEQ_T2T_BIN="${PATHSEQ_T2T_BIN:-pathseq-t2t}"
 
 sample_id=""
 outdir=""
-star_log=""
+paired_log=""
+single_log=""
 
 usage() {
   cat <<'EOF'
 Usage: run_summarize.sh --sample-id <ID> --outdir <DIR> [OPTIONS]
 
-Creates a STAR primary-read flagstat when --star-log is supplied, then writes
-the summary and normalized classifier tables with the upstream Dohlman
-PathSeq-T2T summarizer, without rerunning filtering or classification.
+Creates a STAR primary-read flagstat when --paired-log and/or --single-log is
+supplied, then writes the summary and normalized classifier tables with the
+upstream Dohlman PathSeq-T2T summarizer, without rerunning filtering or
+classification.
 
 Options:
-  --star-log <Log.final.out>   Generate the primary-read flagstat for STAR.
-  --pathseq-t2t-bin <path>    PathSeq-T2T launcher (default: pathseq-t2t).
+  --paired-log <Log.final.out>  Add a paired-end STAR log (counts read pairs).
+  --single-log <Log.final.out>  Add a single-end STAR log (counts reads).
+  --pathseq-t2t-bin <path>     PathSeq-T2T launcher (default: pathseq-t2t).
 EOF
 }
 
@@ -26,7 +29,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --sample-id) sample_id="${2:?--sample-id requires a value}"; shift 2 ;;
     --outdir) outdir="${2:?--outdir requires a path}"; shift 2 ;;
-    --star-log) star_log="${2:?--star-log requires a path}"; shift 2 ;;
+    --paired-log) paired_log="${2:?--paired-log requires a path}"; shift 2 ;;
+    --single-log) single_log="${2:?--single-log requires a path}"; shift 2 ;;
     --pathseq-t2t-bin) PATHSEQ_T2T_BIN="${2:?--pathseq-t2t-bin requires a path}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -40,15 +44,20 @@ if [[ -z "$sample_id" || -z "$outdir" ]]; then
 fi
 
 input_flagstat="${outdir}/filter_stats/${sample_id}.flagstat.tsv"
-if [[ -n "$star_log" ]]; then
-  "$SCRIPT_DIR/write_star_primary_flagstat.sh" \
-    --star-log "$star_log" \
-    --output "$input_flagstat"
+if [[ -n "$paired_log" || -n "$single_log" ]]; then
+  flagstat_args=(--output "$input_flagstat")
+  if [[ -n "$paired_log" ]]; then
+    flagstat_args+=(--paired-log "$paired_log")
+  fi
+  if [[ -n "$single_log" ]]; then
+    flagstat_args+=(--single-log "$single_log")
+  fi
+  "$SCRIPT_DIR/write_star_primary_flagstat.sh" "${flagstat_args[@]}"
 fi
 
 if [[ ! -s "$input_flagstat" ]]; then
   echo "ERROR: Missing primary-read flagstat: $input_flagstat" >&2
-  echo "For STAR runs, provide --star-log <sample.star.Log.final.out>." >&2
+  echo "For STAR runs, provide --paired-log and/or --single-log with the corresponding Log.final.out file." >&2
   exit 1
 fi
 
