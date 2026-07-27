@@ -36,8 +36,9 @@ Edit `parameters.yaml` before running. The important fields are:
 - `bam_suffix` - exact suffix removed to obtain the sample identifier
 - `outdir` - the single durable, curated result directory; large FASTQs and
   BAMs remain only in Nextflow's work directory
-- `conda_prefix` - absolute path to the `pathseq-t2t-nextflow` Conda environment; the
-  SLURM profile adds its executables and Java runtime to every batch job
+- `conda_prefix` - absolute path to the `pathseq-t2t-nextflow` Conda
+  environment; the SLURM and LSF profiles add its executables and Java runtime
+  to every batch job
 - `aligner` - `star` or `bwa`
 - `qc.adapters` - adapter FASTA; use this repo's `assets/adapters.fa`
 - `qc.min_length` - minimum retained read length; configured as `45`
@@ -47,6 +48,9 @@ Edit `parameters.yaml` before running. The important fields are:
 - `resources.*` - per-stage CPU, memory, wall-time, and GATK heap settings
 - `slurm.max_jobs` - global maximum number of submitted/active SLURM jobs;
   configured as `20`, equivalent to an array concurrency limit such as `%20`
+- `lsf.queue` - LSF queue supplied to `bsub -q`
+- `lsf.project` - LSF billing project supplied to `bsub -P`
+- `lsf.max_jobs` - global maximum number of submitted/active LSF jobs
 
 Both BWA and STAR alignment consume the cleaned FASTQs emitted by BBDuk.
 Samples may contain paired reads, single-end/unpaired reads, or both. Empty
@@ -273,6 +277,53 @@ Nextflow applies `slurm.max_jobs` through `executor.queueSize`. When the limit
 is reached, completed jobs free slots for subsequent processes. Change the
 value in `parameters.yaml` for cohort runs; it applies across the whole
 workflow rather than separately to each process.
+
+## LSF execution
+
+The `lsf` profile submits every workflow process through `bsub`:
+
+```bash
+nextflow run . \
+  -params-file ./parameters.yaml \
+  -profile lsf \
+  -work-dir "$WORK_DIR" \
+  -resume
+```
+
+Configure the site-specific queue, billing project, and global job limit in
+`parameters.yaml`:
+
+```yaml
+lsf:
+  queue: YOUR_LSF_QUEUE
+  project: YOUR_LSF_PROJECT
+  max_jobs: 20
+```
+
+The profile passes `lsf.queue` through `process.queue` and adds
+`-P <project> -R "span[hosts=1]"` to each child job through
+`process.clusterOptions`. If `lsf.project` is empty, the profile still requests
+`span[hosts=1]`.
+
+The profile keeps the CPU, total-memory, and wall-time values defined under
+`resources`. `executor.perJobMemLimit = false` tells Nextflow to express LSF
+memory requests per CPU slot. For example, an 8-CPU process requesting 64 GB
+total requests approximately 8 GB per slot.
+
+The optional `run_lsf.sh` wrapper submits the long-lived Nextflow controller as
+a one-CPU, 4 GB LSF job:
+
+```bash
+bsub < run_lsf.sh
+```
+
+Before submission, edit its `#BSUB` project and queue, plus `INPUT_DIR`,
+`WORK_DIR`, `OUTDIR`, `REPO_ROOT`, and `PARAMS_FILE`. The wrapper checks out
+the immutable `v0.3.0` tag and expects Nextflow and `bsub` to be available in
+the controller job environment. The `#BSUB -P` directive applies only to the
+controller; child jobs use `lsf.project` from the parameter file. If the
+cluster prohibits scheduler submission from compute jobs, run the same
+`nextflow run` command from a persistent login-node session instead.
 
 For a local graph and syntax preview on a machine with Nextflow installed:
 
