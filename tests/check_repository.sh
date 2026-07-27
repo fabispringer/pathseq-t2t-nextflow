@@ -108,4 +108,29 @@ grep -Eq '^lsf:$' parameters.example.yaml || {
   exit 1
 }
 
+grep -Fq 'process WRITE_WORKFLOW_VERSION' main.nf || {
+  echo "ERROR: main.nf is missing the workflow provenance process." >&2
+  exit 1
+}
+grep -Fq "path 'workflow_version.tsv'" main.nf || {
+  echo "ERROR: WRITE_WORKFLOW_VERSION does not declare workflow_version.tsv." >&2
+  exit 1
+}
+grep -Fq "printf '%s\\\\t%s\\\\n'" main.nf || {
+  echo "ERROR: WRITE_WORKFLOW_VERSION does not write a deterministic TSV with printf." >&2
+  exit 1
+}
+if grep -Fq 'cat > workflow_version.tsv <<' main.nf; then
+  echo "ERROR: WRITE_WORKFLOW_VERSION uses an indentation-sensitive heredoc." >&2
+  exit 1
+fi
+grep -Fq 'WRITE_WORKFLOW_VERSION(versionInfo)' main.nf || {
+  echo "ERROR: The workflow does not invoke WRITE_WORKFLOW_VERSION." >&2
+  exit 1
+}
+grep -Fq 'pipeline_info/workflow_version.tsv' README.md || {
+  echo "ERROR: README.md does not document workflow provenance output." >&2
+  exit 1
+}
+
 echo "Repository checks passed."

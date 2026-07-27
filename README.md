@@ -98,6 +98,20 @@ primary records.
 
 ## Running
 
+For reproducible analyses, execute the immutable release tag rather than the
+moving `main` branch:
+
+```bash
+git fetch --tags
+git checkout --detach v0.3.0
+git describe --tags --exact-match
+```
+
+The Conda environment remains named `pathseq-t2t-nextflow`; it does not need a
+version-specific prefix. Every run writes `pipeline_info/workflow_version.tsv`
+with the workflow version, Git commit and revision, repository, and Nextflow
+version.
+
 SLURM:
 
 ```bash
