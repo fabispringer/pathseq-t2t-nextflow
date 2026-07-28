@@ -173,6 +173,12 @@ HLP
   local bam_aligned_unpaired="${OUTDIR_BAMS}/${base_unpaired}.t2t_aln.bam"
   local bam_decoys_paired="${OUTDIR_BAMS}/${base_paired}.t2t_decoys.bam"
   local bam_decoys_unpaired="${OUTDIR_BAMS}/${base_unpaired}.t2t_decoys.bam"
+  local bam_unaligned_raw_paired="${OUTDIR_BAMS}/${base_paired}.t2t_unaligned.raw.bam"
+  local bam_unaligned_raw_unpaired="${OUTDIR_BAMS}/${base_unpaired}.t2t_unaligned.raw.bam"
+  local tmp_output_paired="${output_paired}.tmp.candidate.bam"
+  local tmp_output_unpaired="${output_unpaired}.tmp.candidate.bam"
+  local tmp_merge_paired="${output_paired}.tmp.merge.bam"
+  local tmp_merge_unpaired="${output_unpaired}.tmp.merge.bam"
 
   if [[ ${dont_overwrite} -eq 1 && -f "${output_paired}" && -f "${output_unpaired}" ]]; then
     log "t2tfilter (--dont-overwrite): final outputs exist; skipping."
@@ -217,7 +223,9 @@ HLP
   if [[ "${paired_input_records}" -eq 0 ]]; then
     log "No paired reads entered t2tfilter; creating a header-only paired output BAM"
     samtools view -H "${input_paired}" |
-      samtools view -b -o "${output_paired}" -
+      samtools view -b -o "${tmp_output_paired}" -
+    ubam_check_or_die "${tmp_output_paired}" "t2tfilter: empty paired candidate"
+    mv -f "${tmp_output_paired}" "${output_paired}"
   else
     if [[ ! -f "${bam_aligned_paired}" || ${dont_overwrite} -eq 0 ]]; then
       log "Aligning paired reads to T2T"
@@ -232,9 +240,13 @@ HLP
     if [[ ! -f "${output_paired}" || ${dont_overwrite} -eq 0 ]]; then
       log "[ Extracting paired unaligned reads ]"
       time samtools view -@ "${threads}" -b -h -f 3 -e '[AS]>35' \
-        -U >(samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${output_paired}" -) \
-        -o "${bam_decoys_paired}" \
+        -U "${bam_unaligned_raw_paired}" \
+        -o /dev/null \
         "${bam_aligned_paired}"
+      time samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD \
+        -o "${tmp_output_paired}" \
+        "${bam_unaligned_raw_paired}"
+      bam_check_or_die "${tmp_output_paired}" "t2tfilter: paired candidate"
 
       if [[ -n "${decoys_to_mask}" ]]; then
         log "[ Extracting paired decoy-overlap reads for merge ]"
@@ -242,12 +254,18 @@ HLP
           "${bam_aligned_paired}" \
           | samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${bam_decoys_paired}" -
 
-        if [[ -s "${bam_decoys_paired}" ]]; then
-          local tmp_merge_p="${output_paired}.tmp.merge.bam"
+        local paired_decoy_records
+        paired_decoy_records="$(samtools view -c "${bam_decoys_paired}")"
+        if [[ "${paired_decoy_records}" -gt 0 ]]; then
           log "[ Merging paired decoy-overlap reads into output ]"
-          time samtools cat -o "${tmp_merge_p}" "${output_paired}" "${bam_decoys_paired}"
-          mv -f "${tmp_merge_p}" "${output_paired}"
+          time samtools cat -o "${tmp_merge_paired}" "${tmp_output_paired}" "${bam_decoys_paired}"
+          bam_check_or_die "${tmp_merge_paired}" "t2tfilter: merged paired candidate"
+          mv -f "${tmp_merge_paired}" "${output_paired}"
+        else
+          mv -f "${tmp_output_paired}" "${output_paired}"
         fi
+      else
+        mv -f "${tmp_output_paired}" "${output_paired}"
       fi
     fi
   fi
@@ -255,7 +273,9 @@ HLP
   if [[ "${unpaired_input_records}" -eq 0 ]]; then
     log "No unpaired reads entered t2tfilter; creating a header-only unpaired output BAM"
     samtools view -H "${input_unpaired}" |
-      samtools view -b -o "${output_unpaired}" -
+      samtools view -b -o "${tmp_output_unpaired}" -
+    ubam_check_or_die "${tmp_output_unpaired}" "t2tfilter: empty unpaired candidate"
+    mv -f "${tmp_output_unpaired}" "${output_unpaired}"
   else
     if [[ ! -f "${bam_aligned_unpaired}" || ${dont_overwrite} -eq 0 ]]; then
       log "[ Aligning unpaired reads to T2T ]"
@@ -267,9 +287,13 @@ HLP
     if [[ ! -f "${output_unpaired}" || ${dont_overwrite} -eq 0 ]]; then
       log "[ Extracting unpaired unaligned reads ]"
       time samtools view -@ "${threads}" -b -h -e '[AS]>35' \
-        -U >(samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${output_unpaired}" -) \
-        -o "${bam_decoys_unpaired}" \
+        -U "${bam_unaligned_raw_unpaired}" \
+        -o /dev/null \
         "${bam_aligned_unpaired}"
+      time samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD \
+        -o "${tmp_output_unpaired}" \
+        "${bam_unaligned_raw_unpaired}"
+      bam_check_or_die "${tmp_output_unpaired}" "t2tfilter: unpaired candidate"
 
       if [[ -n "${decoys_to_mask}" ]]; then
         log "[ Extracting unpaired decoy-overlap reads for merge ]"
@@ -277,19 +301,24 @@ HLP
           "${bam_aligned_unpaired}" \
           | samtools view -@ "${threads}" -b -h -F 2048 -x SA -x OQ -x MD -o "${bam_decoys_unpaired}" -
 
-        if [[ -s "${bam_decoys_unpaired}" ]]; then
-          local tmp_merge_u="${output_unpaired}.tmp.merge.bam"
+        local unpaired_decoy_records
+        unpaired_decoy_records="$(samtools view -c "${bam_decoys_unpaired}")"
+        if [[ "${unpaired_decoy_records}" -gt 0 ]]; then
           log "[ Merging unpaired decoy-overlap reads into output ]"
-          time samtools cat -o "${tmp_merge_u}" "${output_unpaired}" "${bam_decoys_unpaired}"
-          mv -f "${tmp_merge_u}" "${output_unpaired}"
+          time samtools cat -o "${tmp_merge_unpaired}" "${tmp_output_unpaired}" "${bam_decoys_unpaired}"
+          bam_check_or_die "${tmp_merge_unpaired}" "t2tfilter: merged unpaired candidate"
+          mv -f "${tmp_merge_unpaired}" "${output_unpaired}"
+        else
+          mv -f "${tmp_output_unpaired}" "${output_unpaired}"
         fi
+      else
+        mv -f "${tmp_output_unpaired}" "${output_unpaired}"
       fi
     fi
   fi
 
-  sleep 1
-  samtools flagstat --output-fmt tsv "${output_paired}" > "${flagstat_unaligned_paired}" || true
-  samtools flagstat --output-fmt tsv "${output_unpaired}" > "${flagstat_unaligned_unpaired}" || true
+  samtools flagstat --output-fmt tsv "${output_paired}" > "${flagstat_unaligned_paired}"
+  samtools flagstat --output-fmt tsv "${output_unpaired}" > "${flagstat_unaligned_unpaired}"
 
   if [[ "${paired_input_records}" -eq 0 ]]; then
     ubam_check_or_die "${output_paired}" "t2tfilter: empty final paired"
@@ -307,7 +336,10 @@ HLP
     for f in \
       "${fastq_r1}" "${fastq_r2}" "${fastq_u}" \
       "${bam_aligned_paired}" "${bam_aligned_unpaired}" \
-      "${bam_decoys_paired}" "${bam_decoys_unpaired}"
+      "${bam_decoys_paired}" "${bam_decoys_unpaired}" \
+      "${bam_unaligned_raw_paired}" "${bam_unaligned_raw_unpaired}" \
+      "${tmp_output_paired}" "${tmp_output_unpaired}" \
+      "${tmp_merge_paired}" "${tmp_merge_unpaired}"
     do
       [[ -e "$f" ]] && rm -f "$f"
     done
