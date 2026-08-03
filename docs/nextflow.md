@@ -179,11 +179,11 @@ have been checked; it is required for `-resume`.
 ## Workflow version and provenance
 
 Release versions follow semantic versioning and are published as immutable Git
-tags such as `v0.3.0`. Run a distinct release from a detached tag:
+tags such as `v0.3.1`. Run a distinct release from a detached tag:
 
 ```bash
 git fetch --tags
-git checkout --detach v0.3.0
+git checkout --detach v0.3.1
 git describe --tags --exact-match
 ```
 
@@ -344,7 +344,7 @@ bsub < run_lsf.sh
 
 Before submission, edit its `#BSUB` project and queue, plus `INPUT_DIR`,
 `WORK_DIR`, `OUTDIR`, `REPO_ROOT`, and `PARAMS_FILE`. The wrapper checks out
-the immutable `v0.3.0` tag and expects Nextflow and `bsub` to be available in
+the immutable `v0.3.1` tag and expects Nextflow and `bsub` to be available in
 the controller job environment. The `#BSUB -P` directive applies only to the
 controller; child jobs use `lsf.project` from the parameter file. If the
 cluster prohibits scheduler submission from compute jobs, run the same

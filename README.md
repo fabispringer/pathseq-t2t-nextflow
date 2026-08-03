@@ -32,7 +32,7 @@ it for production analysis.
 
 ## Requirements
 
-- Linux or an HPC cluster with SLURM
+- Linux or an HPC cluster with SLURM or LSF
 - Conda/Mamba
 - Git
 - reference files and classifier databases supplied by the user
@@ -98,6 +98,20 @@ primary records.
 
 ## Running
 
+For reproducible analyses, execute the immutable release tag rather than the
+moving `main` branch:
+
+```bash
+git fetch --tags
+git checkout --detach v0.3.1
+git describe --tags --exact-match
+```
+
+The Conda environment remains named `pathseq-t2t-nextflow`; it does not need a
+version-specific prefix. Every run writes `pipeline_info/workflow_version.tsv`
+with the workflow version, Git commit and revision, repository, and Nextflow
+version.
+
 SLURM:
 
 ```bash
@@ -107,6 +121,24 @@ nextflow run . \
   -work-dir /path/to/scratch/work \
   -resume
 ```
+
+LSF:
+
+```bash
+nextflow run . \
+  -params-file parameters.yaml \
+  -profile lsf \
+  -work-dir /path/to/shared/work \
+  -resume
+```
+
+Set `lsf.queue`, `lsf.project`, and `lsf.max_jobs` in `parameters.yaml`.
+Nextflow submits each process through `bsub` using the process-specific CPU,
+memory, and wall-time settings. The optional `run_lsf.sh` wrapper submits a
+one-core controller job; edit its `#BSUB` directives and run-specific paths
+before submitting it with `bsub < run_lsf.sh`. See
+[docs/nextflow.md](docs/nextflow.md) for LSF memory semantics and controller
+job details.
 
 For a direct Bash-run local execution, edit the three paths at the top of
 `run.sh` and run:
