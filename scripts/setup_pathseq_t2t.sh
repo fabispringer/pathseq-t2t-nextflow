@@ -20,6 +20,8 @@ install -m 0755 "${REPO_ROOT}/overrides/qcfilter.sh" \
   "${RUNTIME_DIR}/src/commands/qcfilter.sh"
 install -m 0755 "${REPO_ROOT}/overrides/t2tfilter.sh" \
   "${RUNTIME_DIR}/src/commands/t2tfilter.sh"
+install -m 0755 "${REPO_ROOT}/overrides/io.sh" \
+  "${RUNTIME_DIR}/lib/io.sh"
 
 actual_commit="$(git -C "${RUNTIME_DIR}" rev-parse HEAD)"
 [[ "${actual_commit}" == "${UPSTREAM_COMMIT}" ]] || {
@@ -29,4 +31,4 @@ actual_commit="$(git -C "${RUNTIME_DIR}" rev-parse HEAD)"
 
 echo "Prepared workflow-managed PathSeq-T2T runtime at: ${RUNTIME_DIR}"
 echo "Upstream commit: ${actual_commit}"
-echo "Local reviewed fixes: qcfilter.sh, t2tfilter.sh"
+echo "Local reviewed fixes: qcfilter.sh, t2tfilter.sh, io.sh"

@@ -10,7 +10,7 @@ readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_FILE="${CONFIG_FILE:-${REPO_ROOT}/nextflow.config}"
 readonly PARAMS_FILE="${PARAMS_FILE:-${REPO_ROOT}/parameters.yaml}"
 readonly PIPELINE_INFO_DIR="${OUTDIR}/pipeline_info"
-readonly WORKFLOW_VERSION="v0.3.0"
+readonly WORKFLOW_VERSION="v0.3.1"
 
 for path_value in "${INPUT_DIR}" "${WORK_DIR}" "${OUTDIR}"; do
   if [[ "${path_value}" == /path/to/* ]]; then

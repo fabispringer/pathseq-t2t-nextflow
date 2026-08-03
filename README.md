@@ -103,7 +103,7 @@ moving `main` branch:
 
 ```bash
 git fetch --tags
-git checkout --detach v0.3.0
+git checkout --detach v0.3.1
 git describe --tags --exact-match
 ```
 
@@ -196,6 +196,11 @@ See [docs/upstream-modifications.md](docs/upstream-modifications.md) and
 The inherited paired/unpaired counting behavior and a candidate upstream
 correction, which is not implemented here, are recorded separately in
 [docs/read-counting-review.md](docs/read-counting-review.md).
+
+STAR uses its explicit unmapped-read output as the initial host-filtered input
+and does not currently rescue STAR-aligned viral decoy contigs. The expected
+effect and deferred implementation decision are documented in
+[docs/star-decoy-handling.md](docs/star-decoy-handling.md).
 
 ## License and citation
 

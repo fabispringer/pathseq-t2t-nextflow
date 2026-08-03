@@ -2,7 +2,7 @@
 
 The managed runtime is pinned to PathSeq-T2T commit
 `51d74430b6a4b34073f2d878612ac24b6a1d1e80`. Running
-`scripts/setup_pathseq_t2t.sh` clones that exact revision and installs two
+`scripts/setup_pathseq_t2t.sh` clones that exact revision and installs three
 reviewed modified command files. It does not change any checkout outside this
 project.
 
@@ -10,12 +10,14 @@ The reviewed, version-controlled source files are:
 
 - `overrides/qcfilter.sh`
 - `overrides/t2tfilter.sh`
+- `overrides/io.sh`
 
 During setup they overwrite the corresponding files inside the generated,
 Git-ignored runtime:
 
 - `pathseq-t2t/upstream/src/commands/qcfilter.sh`
 - `pathseq-t2t/upstream/src/commands/t2tfilter.sh`
+- `pathseq-t2t/upstream/lib/io.sh`
 
 The files under `overrides/` are the sources of truth and are the files that
 should be committed. The copies under `pathseq-t2t/upstream/` are generated
@@ -42,6 +44,13 @@ against an already-created runtime, copy it to both locations; a fresh
 - corrects Picard option spelling and explicit stdin/stdout handling;
 - writes the selected aligned reads instead of discarding them;
 - retains configured decoy-overlapping reads and merges them into the output;
+- writes T2T-unmapped candidates synchronously before starting decoy extraction
+  or merging, eliminating an inherited process-substitution race;
+- validates temporary candidates and promotes them atomically to final output
+  names only after successful completion;
+- tests decoy BAM record counts rather than treating header-only BAMs as
+  nonempty;
+- treats `samtools flagstat` failures as fatal;
 - makes output and flagstat paths explicit and consistent;
 - counts paired and unpaired input records independently;
 - skips FASTQ conversion, BWA alignment, and extraction for a zero-record
@@ -50,6 +59,14 @@ against an already-created runtime, copy it to both locations; a fresh
   outputs as aligned BAMs;
 - preserves the paired/unpaired two-BAM interface for entirely single-end,
   entirely paired, and mixed samples.
+
+## `io.sh`
+
+- retains upstream `samtools quickcheck` framing validation;
+- additionally performs a complete `samtools view -c` read of every validated
+  BAM;
+- detects corrupt internal BGZF blocks even when a terminal EOF marker allows
+  `quickcheck` to pass.
 
 ## Upstream summarizer retained
 

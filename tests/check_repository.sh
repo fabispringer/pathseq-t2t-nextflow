@@ -8,6 +8,7 @@ bash -n run.sh run_lsf.sh scripts/*.sh overrides/*.sh
 python3 -m py_compile scripts/*.py
 bash tests/test_qcfilter_metrics.sh
 bash tests/test_write_star_primary_flagstat.sh
+bash tests/test_bam_integrity_contract.sh
 python3 tests/test_merge_star_gene_counts.py
 python3 tests/test_collate_kraken_results.py
 python3 tests/test_check_fastq_content.py
@@ -38,7 +39,7 @@ for file in "${required[@]}"; do
   }
 done
 
-expected_version="0.3.0"
+expected_version="0.3.1"
 citation_version="$(awk '$1 == "version:" { print $2; exit }' CITATION.cff)"
 manifest_version="$(
   awk -F"'" '
