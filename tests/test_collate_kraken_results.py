@@ -58,6 +58,22 @@ def main() -> int:
         assert "46123\t6\n" in species_counts
         assert "46123\t6.0\n" not in species_counts
 
+        sample.write_text(header, encoding="utf-8")
+        result = run(
+            "--taxonomy",
+            str(taxonomy),
+            "--output-dir",
+            str(output_dir),
+            str(sample),
+        )
+        assert result.returncode == 0, result.stderr
+        assert (output_dir / "kraken_species_counts.tsv").read_text(
+            encoding="utf-8"
+        ) == "tax_id\tsample\nBacteria\t0\n"
+        assert (output_dir / "kraken_species_rpm.tsv").read_text(
+            encoding="utf-8"
+        ) == "tax_id\tsample\nBacteria\t0\n"
+
         sample.write_text(
             header + "Test species\t46123\tS\t6.5\t6\t60.0\t60.0\t60.0\n",
             encoding="utf-8",
