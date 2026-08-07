@@ -58,13 +58,14 @@ def read_taxonomy(path: Path) -> tuple[dict[str, dict[str, str]], list[dict[str,
 
 def read_sample(path: Path, taxonomy: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
     with path.open(newline="") as handle:
-        rows = list(csv.DictReader(handle, delimiter="\t"))
-    required = {
-        "name", "tax_id", "rank", "reads_clade", "reads_taxon",
-        "reads_clade_per_million", "reads_taxon_per_million", "pct_reads",
-    }
-    if not rows or set(rows[0]) != required:
-        raise ValueError(f"{path}: unexpected Kraken result columns")
+        reader = csv.DictReader(handle, delimiter="\t")
+        required = {
+            "name", "tax_id", "rank", "reads_clade", "reads_taxon",
+            "reads_clade_per_million", "reads_taxon_per_million", "pct_reads",
+        }
+        if reader.fieldnames is None or set(reader.fieldnames) != required:
+            raise ValueError(f"{path}: unexpected Kraken result columns")
+        rows = list(reader)
     indexed: dict[str, dict[str, str]] = {}
     for row in rows:
         tax_id = row["tax_id"]
