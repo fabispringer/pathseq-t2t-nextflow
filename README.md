@@ -103,7 +103,7 @@ moving `main` branch:
 
 ```bash
 git fetch --tags
-git checkout --detach v0.3.1
+git checkout --detach v0.3.2
 git describe --tags --exact-match
 ```
 

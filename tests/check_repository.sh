@@ -39,7 +39,7 @@ for file in "${required[@]}"; do
   }
 done
 
-expected_version="0.3.1"
+expected_version="0.3.2"
 citation_version="$(awk '$1 == "version:" { print $2; exit }' CITATION.cff)"
 manifest_version="$(
   awk -F"'" '
