@@ -1,4 +1,5 @@
 input_mode: fastq
+fastq_layout: paired
 input_dir: /path/to/input
 remote_input_dir: null
 bam_suffix: .bam

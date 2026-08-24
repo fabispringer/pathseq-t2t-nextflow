@@ -90,11 +90,13 @@ T2T references, classifier database, Picard JAR, and cluster queue as required.
 Paths in `parameters.yaml` may be absolute; the file is ignored by Git to help
 avoid publishing local paths accidentally.
 
-Input discovery is recursive. FASTQ mode accepts paired files ending in either
-`_R1.fastq.gz`/`_R2.fastq.gz` or `_1.fastq.gz`/`_2.fastq.gz`. Both conventions
-are normalized to staged `_R1.fastq.gz`/`_R2.fastq.gz` names. BAM mode uses the
-configured `bam_suffix`. BAM input may contain paired, single-end, or mixed
-primary records.
+Input discovery is recursive. Set `fastq_layout: paired` (the default) for
+paired files ending in either `_R1.fastq.gz`/`_R2.fastq.gz` or
+`_1.fastq.gz`/`_2.fastq.gz`. Set `fastq_layout: single` for single-end files
+ending in `_R1.fastq.gz` or `_1.fastq.gz`. Both layouts are normalized to the
+same internal R1, R2, and unpaired FASTQ streams. BAM mode uses the configured
+`bam_suffix`. BAM input may contain paired, single-end, or mixed primary
+records.
 
 ## Running
 

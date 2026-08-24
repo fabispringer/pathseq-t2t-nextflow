@@ -29,6 +29,9 @@ It also allows failed stages to resume independently with `-resume`.
 Edit `parameters.yaml` before running. The important fields are:
 
 - `input_mode` - `fastq` (default) or `bam`
+- `fastq_layout` - `paired` (default) or `single`; paired mode requires one
+  complete `_R1`/`_R2` or `_1`/`_2` pair per sample, while single mode accepts
+  one `_R1` or `_1` file per sample
 - `input_dir` - source directory whose selected input files are symlinked by
   the first pipeline process
 - `remote_input_dir` - source directory whose selected input files are copied
@@ -279,12 +282,15 @@ nextflow run . \
 For BAM input, use `--input_mode bam`. The staging operation appears as
 `STAGE_FASTQ_INPUT` or `STAGE_BAM_INPUT` in the Nextflow DAG, trace, timeline,
 and report. Every downstream process consumes only these staged outputs.
-Discovery is recursive: FASTQ mode selects pairs named either
-`_R1.fastq.gz`/`_R2.fastq.gz` or `_1.fastq.gz`/`_2.fastq.gz`, while BAM mode
-selects files ending in `bam_suffix`. FASTQ pairs from either convention are
-staged as `<sample>_R1.fastq.gz` and `<sample>_R2.fastq.gz`, so downstream
-processes always receive the same normalized names. A sample is rejected if
-its pair is incomplete or if both naming conventions are present.
+Discovery is recursive. With `fastq_layout: paired`, FASTQ mode selects pairs
+named either `_R1.fastq.gz`/`_R2.fastq.gz` or
+`_1.fastq.gz`/`_2.fastq.gz`. With `fastq_layout: single`, it selects one
+`_R1.fastq.gz` or `_1.fastq.gz` file per sample. Both layouts are normalized
+to `<sample>_R1.fastq.gz`, `<sample>_R2.fastq.gz`, and
+`<sample>_unpaired.fastq.gz`: paired input populates R1/R2 and single input
+populates unpaired. A paired sample is rejected if its pair is incomplete or
+both naming conventions are present; a single sample is rejected if both R1
+naming conventions are present.
 
 The trace includes both observed utilization (`%cpu`, `peak_rss`, I/O, and
 runtime) and the requested `cpus`, `memory`, and `time` for each task.

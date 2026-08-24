@@ -68,20 +68,34 @@ process STAGE_FASTQ_INPUT {
   label 'stage'
 
   input:
-  tuple val(sample_id), val(source_reads)
+  tuple val(sample_id), val(fastq_layout), val(source_reads)
 
   output:
-  tuple val(sample_id), path("pipeline_input/${sample_id}_{R1,R2}.fastq.gz"), emit: reads
+  tuple val(sample_id), path("pipeline_input/${sample_id}_{R1,R2,unpaired}.fastq.gz"), emit: reads
 
   script:
-  def r1 = source_reads[0]
-  def r2 = source_reads[1]
   def stageCommand = params.remote_input_dir ? 'cp -L' : 'ln -s'
+  def stageReads
+  if (fastq_layout == 'paired') {
+    def r1 = source_reads[0]
+    def r2 = source_reads[1]
+    stageReads = """
+    ${stageCommand} -- '${r1}' pipeline_input/${sample_id}_R1.fastq.gz
+    ${stageCommand} -- '${r2}' pipeline_input/${sample_id}_R2.fastq.gz
+    gzip -c </dev/null > pipeline_input/${sample_id}_unpaired.fastq.gz
+    """
+  } else {
+    def unpaired = source_reads[0]
+    stageReads = """
+    gzip -c </dev/null > pipeline_input/${sample_id}_R1.fastq.gz
+    gzip -c </dev/null > pipeline_input/${sample_id}_R2.fastq.gz
+    ${stageCommand} -- '${unpaired}' pipeline_input/${sample_id}_unpaired.fastq.gz
+    """
+  }
   """
   set -euo pipefail
   mkdir -p pipeline_input
-  ${stageCommand} -- '${r1}' pipeline_input/${sample_id}_R1.fastq.gz
-  ${stageCommand} -- '${r2}' pipeline_input/${sample_id}_R2.fastq.gz
+  ${stageReads}
   """
 }
 
@@ -917,6 +931,10 @@ workflow {
   if (!(inputMode in ['fastq', 'bam'])) {
     throw new IllegalArgumentException("params.input_mode must be 'fastq' or 'bam', got: ${params.input_mode}")
   }
+  fastqLayout = params.fastq_layout.toString().toLowerCase()
+  if (!(fastqLayout in ['paired', 'single'])) {
+    throw new IllegalArgumentException("params.fastq_layout must be 'paired' or 'single', got: ${params.fastq_layout}")
+  }
   directInputDir = params.input_dir?.toString()?.trim()
   remoteInputDir = params.remote_input_dir?.toString()?.trim()
   if (directInputDir && remoteInputDir) {
@@ -937,7 +955,7 @@ workflow {
     STAGE_BAM_INPUT(source_bam_ch)
     BAM_TO_FASTQ(STAGE_BAM_INPUT.out.bam)
     reads_ch = BAM_TO_FASTQ.out.reads
-  } else {
+  } else if (fastqLayout == 'paired') {
     readsGlob = "${sourceInputDir}/**/*_{R1,R2,1,2}.fastq.gz"
     source_reads_ch = Channel.fromPath(readsGlob, checkIfExists: true)
       .map { read ->
@@ -965,7 +983,29 @@ workflow {
           .transpose()
           .sort { left, right -> left[0] <=> right[0] }
           .collect { mate_and_path -> mate_and_path[1] }
-        tuple(sample_id, ordered_reads)
+        tuple(sample_id, fastqLayout, ordered_reads)
+      }
+    STAGE_FASTQ_INPUT(source_reads_ch)
+    reads_ch = STAGE_FASTQ_INPUT.out.reads
+  } else {
+    readsGlob = "${sourceInputDir}/**/*_{R1,1}.fastq.gz"
+    source_reads_ch = Channel.fromPath(readsGlob, checkIfExists: true)
+      .map { read ->
+        def matcher = read.name =~ /^(.*)_(R?1)\.fastq\.gz$/
+        if (!matcher.matches()) {
+          throw new IllegalArgumentException("Could not parse single-end FASTQ name: ${read}")
+        }
+        tuple(matcher[0][1], read.toString())
+      }
+      .groupTuple(by: 0)
+      .map { sample_id, read_paths ->
+        if (read_paths.size() != 1) {
+          throw new IllegalArgumentException(
+            "Expected exactly one single-end FASTQ for sample '${sample_id}' using either " +
+            "_R1 or _1 naming; found ${read_paths}"
+          )
+        }
+        tuple(sample_id, fastqLayout, read_paths)
       }
     STAGE_FASTQ_INPUT(source_reads_ch)
     reads_ch = STAGE_FASTQ_INPUT.out.reads
