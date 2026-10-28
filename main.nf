@@ -68,20 +68,34 @@ process STAGE_FASTQ_INPUT {
   label 'stage'
 
   input:
-  tuple val(sample_id), val(source_reads)
+  tuple val(sample_id), val(fastq_layout), val(source_reads)
 
   output:
-  tuple val(sample_id), path("pipeline_input/${sample_id}_{R1,R2}.fastq.gz"), emit: reads
+  tuple val(sample_id), path("pipeline_input/${sample_id}_{R1,R2,unpaired}.fastq.gz"), emit: reads
 
   script:
-  def r1 = source_reads[0]
-  def r2 = source_reads[1]
   def stageCommand = params.remote_input_dir ? 'cp -L' : 'ln -s'
+  def stageReads
+  if (fastq_layout == 'paired') {
+    def r1 = source_reads[0]
+    def r2 = source_reads[1]
+    stageReads = """
+    ${stageCommand} -- '${r1}' pipeline_input/${sample_id}_R1.fastq.gz
+    ${stageCommand} -- '${r2}' pipeline_input/${sample_id}_R2.fastq.gz
+    gzip -c </dev/null > pipeline_input/${sample_id}_unpaired.fastq.gz
+    """
+  } else {
+    def unpaired = source_reads[0]
+    stageReads = """
+    gzip -c </dev/null > pipeline_input/${sample_id}_R1.fastq.gz
+    gzip -c </dev/null > pipeline_input/${sample_id}_R2.fastq.gz
+    ${stageCommand} -- '${unpaired}' pipeline_input/${sample_id}_unpaired.fastq.gz
+    """
+  }
   """
   set -euo pipefail
   mkdir -p pipeline_input
-  ${stageCommand} -- '${r1}' pipeline_input/${sample_id}_R1.fastq.gz
-  ${stageCommand} -- '${r2}' pipeline_input/${sample_id}_R2.fastq.gz
+  ${stageReads}
   """
 }
 
@@ -216,7 +230,7 @@ process BBDUK {
 
   output:
   tuple val(sample_id), path("${sample_id}.qc_{R1,R2,unpaired}.fastq.gz"), emit: reads
-  path "${sample_id}.bbduk_stats.txt", emit: stats
+  path "${sample_id}.{paired,unpaired}.bbduk_stats.txt", emit: stats
 
   script:
   def r1 = reads[0]
@@ -239,24 +253,21 @@ process BBDUK {
     out1=${sample_id}.qc_R1.fastq.gz \\
     out2=${sample_id}.qc_R2.fastq.gz \\
     outs=tmp_unpaired.fq \\
-    stats=${sample_id}.bbduk_stats.txt
+    stats=${sample_id}.paired.bbduk_stats.txt
 
   ${addUnpaired}
 
-  if [[ -s tmp_unpaired.fq ]]; then
-    bbduk.sh \\
-      -Xmx${task.memory.toGiga()}g \\
-      t=${task.cpus} \\
-      ordered=t \\
-      trd=t \\
-      ${params.qc.bbduk_params} \\
-      ref=${adapters} \\
-      minlen=${params.qc.min_length} \\
-      in=tmp_unpaired.fq \\
-      out=${sample_id}.qc_unpaired.fastq.gz
-  else
-    gzip -c </dev/null > ${sample_id}.qc_unpaired.fastq.gz
-  fi
+  bbduk.sh \\
+    -Xmx${task.memory.toGiga()}g \\
+    t=${task.cpus} \\
+    ordered=t \\
+    trd=t \\
+    ${params.qc.bbduk_params} \\
+    ref=${adapters} \\
+    minlen=${params.qc.min_length} \\
+    in=tmp_unpaired.fq \\
+    out=${sample_id}.qc_unpaired.fastq.gz \\
+    stats=${sample_id}.unpaired.bbduk_stats.txt
 
   rm -f tmp_unpaired.fq
   """
@@ -917,6 +928,10 @@ workflow {
   if (!(inputMode in ['fastq', 'bam'])) {
     throw new IllegalArgumentException("params.input_mode must be 'fastq' or 'bam', got: ${params.input_mode}")
   }
+  fastqLayout = params.fastq_layout.toString().toLowerCase()
+  if (!(fastqLayout in ['paired', 'single'])) {
+    throw new IllegalArgumentException("params.fastq_layout must be 'paired' or 'single', got: ${params.fastq_layout}")
+  }
   directInputDir = params.input_dir?.toString()?.trim()
   remoteInputDir = params.remote_input_dir?.toString()?.trim()
   if (directInputDir && remoteInputDir) {
@@ -937,7 +952,7 @@ workflow {
     STAGE_BAM_INPUT(source_bam_ch)
     BAM_TO_FASTQ(STAGE_BAM_INPUT.out.bam)
     reads_ch = BAM_TO_FASTQ.out.reads
-  } else {
+  } else if (fastqLayout == 'paired') {
     readsGlob = "${sourceInputDir}/**/*_{R1,R2,1,2}.fastq.gz"
     source_reads_ch = Channel.fromPath(readsGlob, checkIfExists: true)
       .map { read ->
@@ -965,7 +980,29 @@ workflow {
           .transpose()
           .sort { left, right -> left[0] <=> right[0] }
           .collect { mate_and_path -> mate_and_path[1] }
-        tuple(sample_id, ordered_reads)
+        tuple(sample_id, fastqLayout, ordered_reads)
+      }
+    STAGE_FASTQ_INPUT(source_reads_ch)
+    reads_ch = STAGE_FASTQ_INPUT.out.reads
+  } else {
+    readsGlob = "${sourceInputDir}/**/*_{R1,1}.fastq.gz"
+    source_reads_ch = Channel.fromPath(readsGlob, checkIfExists: true)
+      .map { read ->
+        def matcher = read.name =~ /^(.*)_(R?1)\.fastq\.gz$/
+        if (!matcher.matches()) {
+          throw new IllegalArgumentException("Could not parse single-end FASTQ name: ${read}")
+        }
+        tuple(matcher[0][1], read.toString())
+      }
+      .groupTuple(by: 0)
+      .map { sample_id, read_paths ->
+        if (read_paths.size() != 1) {
+          throw new IllegalArgumentException(
+            "Expected exactly one single-end FASTQ for sample '${sample_id}' using either " +
+            "_R1 or _1 naming; found ${read_paths}"
+          )
+        }
+        tuple(sample_id, fastqLayout, read_paths)
       }
     STAGE_FASTQ_INPUT(source_reads_ch)
     reads_ch = STAGE_FASTQ_INPUT.out.reads

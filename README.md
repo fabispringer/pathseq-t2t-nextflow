@@ -11,7 +11,7 @@ affiliated with its upstream maintainers.
 
 ## Workflow overview
 
-1. stage paired FASTQ files or reconstruct FASTQs from primary BAM records;
+1. stage paired or single-end FASTQ files, or reconstruct FASTQs from primary BAM records;
 2. run raw FastQC;
 3. apply configurable BBDuk read cleanup and run post-QC FastQC;
 4. align host reads with BWA or STAR;
@@ -25,6 +25,11 @@ that directory until the run has been reviewed because it is needed by
 `-resume`.
 
 ## Status
+
+This branch prepares **v0.3.3**. The release-tag commands below apply once
+`v0.3.3` has been published; until then, use the release-branch checkout.
+See [release notes](RELEASE_NOTES_v0.3.3.md) and the
+[release preparation guide](docs/release-v0.3.3.md).
 
 This is an early research workflow. Validate parameters, resource requests,
 reference versions, and output counts on representative test data before using
@@ -90,11 +95,13 @@ T2T references, classifier database, Picard JAR, and cluster queue as required.
 Paths in `parameters.yaml` may be absolute; the file is ignored by Git to help
 avoid publishing local paths accidentally.
 
-Input discovery is recursive. FASTQ mode accepts paired files ending in either
-`_R1.fastq.gz`/`_R2.fastq.gz` or `_1.fastq.gz`/`_2.fastq.gz`. Both conventions
-are normalized to staged `_R1.fastq.gz`/`_R2.fastq.gz` names. BAM mode uses the
-configured `bam_suffix`. BAM input may contain paired, single-end, or mixed
-primary records.
+Input discovery is recursive. Set `fastq_layout: paired` (the default) for
+paired files ending in either `_R1.fastq.gz`/`_R2.fastq.gz` or
+`_1.fastq.gz`/`_2.fastq.gz`. Set `fastq_layout: single` for single-end files
+ending in `_R1.fastq.gz` or `_1.fastq.gz`. Both layouts are normalized to the
+same internal R1, R2, and unpaired FASTQ streams. BAM mode uses the configured
+`bam_suffix`. BAM input may contain paired, single-end, or mixed primary
+records.
 
 ## Running
 
@@ -103,7 +110,7 @@ moving `main` branch:
 
 ```bash
 git fetch --tags
-git checkout --detach v0.3.2
+git checkout --detach v0.3.3
 git describe --tags --exact-match
 ```
 
@@ -140,8 +147,8 @@ before submitting it with `bsub < run_lsf.sh`. See
 [docs/nextflow.md](docs/nextflow.md) for LSF memory semantics and controller
 job details.
 
-For a direct Bash-run local execution, edit the three paths at the top of
-`run.sh` and run:
+For direct Bash execution, edit the run choices and paths at the top of
+`run.sh`, select `PROFILE="local"` (default), `"slurm"`, or `"lsf"`, and run:
 
 ```bash
 ./run.sh
@@ -156,8 +163,62 @@ OUTDIR=/path/to/results \
 ./run.sh
 ```
 
-`run.sh` uses Nextflow's `local` executor and contains no SLURM or `sbatch`
-settings. FASTQ discovery is handled by the workflow itself.
+`run.sh` selects the executor through `PROFILE`; it does not submit the
+Nextflow controller with `sbatch`. FASTQ discovery is handled by the workflow.
+
+### Explicit run choices and archived run files
+
+`parameters.example.yaml` documents valid options and defaults. Copy it to
+`parameters.yaml`; keep reference paths and detailed tuning there. In each
+run's `run.sh`, explicitly select the important choices, even for defaults:
+
+```bash
+INPUT_MODE="fastq"       # fastq | bam
+FASTQ_LAYOUT="single"    # paired | single
+ALIGNER="star"           # star | bwa
+PROFILE="slurm"          # local | slurm | lsf
+```
+
+The launcher passes these choices as `--input_mode`, `--fastq_layout`, and
+`--aligner`. Only explicitly passed command-line parameters override YAML
+values; the rest of the file remains effective. `fastq_layout` does not
+control BAM reconstruction. In single mode R2 files are not selected, so do
+not select it for paired-end input.
+
+Keep copies of `run.sh` and `parameters.yaml` in each run directory. Set
+`REPO_ROOT` in the copied launcher (or export it) to the separate source
+checkout. The default `PARAMS_FILE` is beside the launcher; `CONFIG_FILE`
+defaults to the source checkout's `nextflow.config`. For example:
+
+```bash
+REPO_ROOT=/path/to/pathseq-t2t-nextflow ./run.sh
+```
+
+Archive any local configuration supplied with `CONFIG_FILE` as well. Retain
+`pipeline_info/workflow_version.tsv` with the reports to identify the executed
+code; the copied shell and YAML files alone do not freeze the source checkout.
+`parameters.yaml` remains Git-ignored because real run files contain local
+paths. Commit the generic `parameters.example.yaml`, not a site-specific copy.
+
+## Repository checks
+
+Activate the `pathseq-t2t-nextflow` Conda environment before running the
+repository checks. They require Bash, Python 3.11 or newer (`python3` on
+`PATH`), and ripgrep (`rg`). The environment specification pins Python 3.11
+and includes ripgrep. These source-level checks do not require input data or
+reference databases.
+
+For an existing environment created before ripgrep was included:
+
+```bash
+conda activate pathseq-t2t-nextflow
+conda install -n pathseq-t2t-nextflow -c conda-forge python=3.11 ripgrep
+python3 --version
+bash tests/check_repository.sh
+git diff --check
+```
+
+The check script reports missing prerequisites before running component tests.
 
 Local syntax/stub check:
 
@@ -188,7 +249,7 @@ intentional project naming convention, not a taxonomic reclassification.
 ## Upstream modifications
 
 The workflow pins PathSeq-T2T and installs reviewed fixes for uBAM validation,
-command construction, and T2T filtering. Summary and RPM generation are
+command construction, synchronous prefilter BAM writing, and T2T filtering. Summary and RPM generation are
 delegated directly to that pinned checkout's `pathseq-t2t summarize` command.
 See [docs/upstream-modifications.md](docs/upstream-modifications.md) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -2,12 +2,13 @@
 
 The managed runtime is pinned to PathSeq-T2T commit
 `51d74430b6a4b34073f2d878612ac24b6a1d1e80`. Running
-`scripts/setup_pathseq_t2t.sh` clones that exact revision and installs three
-reviewed modified command files. It does not change any checkout outside this
+`scripts/setup_pathseq_t2t.sh` clones that exact revision and installs four
+reviewed modified upstream files. It does not change any checkout outside this
 project.
 
 The reviewed, version-controlled source files are:
 
+- `overrides/prefilter.sh`
 - `overrides/qcfilter.sh`
 - `overrides/t2tfilter.sh`
 - `overrides/io.sh`
@@ -15,6 +16,7 @@ The reviewed, version-controlled source files are:
 During setup they overwrite the corresponding files inside the generated,
 Git-ignored runtime:
 
+- `pathseq-t2t/upstream/src/commands/prefilter.sh`
 - `pathseq-t2t/upstream/src/commands/qcfilter.sh`
 - `pathseq-t2t/upstream/src/commands/t2tfilter.sh`
 - `pathseq-t2t/upstream/lib/io.sh`
@@ -24,6 +26,23 @@ should be committed. The copies under `pathseq-t2t/upstream/` are generated
 runtime files and should not be committed. When testing a revised override
 against an already-created runtime, copy it to both locations; a fresh
 `scripts/setup_pathseq_t2t.sh` installation performs that copy automatically.
+
+## `prefilter.sh`
+
+- preserves the upstream BWA/DRAGEN read-selection criteria and output
+  interface;
+- replaces asynchronous process-substitution writers with explicit,
+  synchronous temporary BAMs;
+- validates the input and completed temporary BAMs before publishing outputs;
+- requires both `samtools quickcheck` and a successful full read of each
+  existing BAM before `--dont-overwrite` can skip regeneration;
+- renames each validated BAM and the flagstat table to its final path
+  (the output set is not a single atomic transaction);
+- removes incomplete temporary outputs when any prefilter step fails.
+
+These changes affect execution and failure handling, not the intended read
+selection. They prevent downstream processes from observing a BAM while it is
+still being written.
 
 ## `qcfilter.sh`
 

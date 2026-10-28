@@ -4,6 +4,21 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
+# Fail before running component checks if the active environment is incomplete.
+for dependency in python3 rg; do
+  if ! command -v "${dependency}" >/dev/null 2>&1; then
+    echo "ERROR: Required command '${dependency}' is missing from PATH." >&2
+    echo "Activate pathseq-t2t-nextflow; for an existing environment, run:" >&2
+    echo "  conda install -n pathseq-t2t-nextflow -c conda-forge python=3.11 ripgrep" >&2
+    exit 1
+  fi
+done
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+  echo "ERROR: Repository checks require Python 3.11 or newer; found $(python3 --version 2>&1)." >&2
+  echo "Activate pathseq-t2t-nextflow or install its pinned Python 3.11." >&2
+  exit 1
+fi
+
 bash -n run.sh run_lsf.sh scripts/*.sh overrides/*.sh
 python3 -m py_compile scripts/*.py
 bash tests/test_qcfilter_metrics.sh
@@ -12,6 +27,11 @@ bash tests/test_bam_integrity_contract.sh
 python3 tests/test_merge_star_gene_counts.py
 python3 tests/test_collate_kraken_results.py
 python3 tests/test_check_fastq_content.py
+python3 tests/test_prefilter_transaction.py
+python3 tests/test_prefilter_arguments.py
+python3 tests/test_prefilter_reuse.py
+python3 tests/test_bbduk_stats.py
+python3 tests/test_run_launcher.py
 
 if rg -n -i '(fspringe|/g/scb|pathseq-t2t_setup|openclaw|gmail)' \
   --glob '!pathseq-t2t/upstream/**' \
@@ -39,7 +59,7 @@ for file in "${required[@]}"; do
   }
 done
 
-expected_version="0.3.2"
+expected_version="0.3.3"
 citation_version="$(awk '$1 == "version:" { print $2; exit }' CITATION.cff)"
 manifest_version="$(
   awk -F"'" '

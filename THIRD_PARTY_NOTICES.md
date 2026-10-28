@@ -6,8 +6,9 @@ This workflow uses and prepares a modified runtime from
 [PathSeq-T2T](https://github.com/abdohlman/pathseq-t2t), pinned to commit
 `51d74430b6a4b34073f2d878612ac24b6a1d1e80`.
 
-The files `overrides/qcfilter.sh` and `overrides/t2tfilter.sh` are modified
-versions of PathSeq-T2T files and remain subject to its MIT license:
+The files `overrides/prefilter.sh`, `overrides/qcfilter.sh`,
+`overrides/t2tfilter.sh`, and `overrides/io.sh` are modified versions of
+PathSeq-T2T files and remain subject to its MIT license:
 
 > MIT License
 >

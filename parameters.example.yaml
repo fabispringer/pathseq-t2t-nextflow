@@ -1,8 +1,24 @@
+# Defaults and option reference. Only explicit --options in run.sh override these.
+# Keep a copy of this file and run.sh in each run directory.
+
+# Input mode: fastq | bam (default: fastq).
 input_mode: fastq
-input_dir: /path/to/input
+# FASTQ layout: paired | single (default: paired). No effect on BAM reconstruction.
+# paired: one *_R1.fastq.gz/*_R2.fastq.gz or *_1.fastq.gz/*_2.fastq.gz pair.
+# single: one *_R1.fastq.gz or *_1.fastq.gz per sample; no automatic detection.
+# In single mode R2 files are not selected. Do not use it for paired-end data.
+fastq_layout: paired
+# Set exactly one input location, here or explicitly in the launcher.
+# input_dir: symlink inputs; remote_input_dir: copy inputs to the work directory.
+input_dir: null
 remote_input_dir: null
+# BAM input only: exact filename suffix removed to obtain the sample ID.
 bam_suffix: .bam
 outdir: results
+# Host aligner: star | bwa (default: star), for both FASTQ and BAM input.
+# star: splice-aware, requires references.star_index and tools.picard_jar.
+# bwa: requires references.grch38_fasta with BWA indexes; not splice-aware.
+# DRAGEN is not a supported workflow aligner option.
 aligner: star
 read_group_platform: ILLUMINA
 conda_prefix: /path/to/conda/envs/pathseq-t2t-nextflow

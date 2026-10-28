@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Run-specific choices, explicit even when they match the parameter defaults.
+INPUT_MODE="fastq"       # fastq | bam
+FASTQ_LAYOUT="paired"    # paired | single; no effect on BAM reconstruction
+ALIGNER="star"           # star | bwa
+PROFILE="local"          # local | slurm | lsf
+
 # Edit these paths, or export INPUT_DIR, WORK_DIR, and OUTDIR before running.
-INPUT_DIR="${INPUT_DIR:-/path/to/paired-fastq}"
+INPUT_DIR="${INPUT_DIR:-/path/to/input}"
 WORK_DIR="${WORK_DIR:-/path/to/nextflow-work}"
 OUTDIR="${OUTDIR:-/path/to/results}"
 
-readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly RUN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# When copying this launcher to a run directory, set/export the source repo path.
+readonly REPO_ROOT="${REPO_ROOT:-${RUN_DIR}}"
 readonly CONFIG_FILE="${CONFIG_FILE:-${REPO_ROOT}/nextflow.config}"
-readonly PARAMS_FILE="${PARAMS_FILE:-${REPO_ROOT}/parameters.yaml}"
+readonly PARAMS_FILE="${PARAMS_FILE:-${RUN_DIR}/parameters.yaml}"
 readonly PIPELINE_INFO_DIR="${OUTDIR}/pipeline_info"
-readonly WORKFLOW_VERSION="v0.3.2"
+readonly WORKFLOW_VERSION="v0.3.3"
 
 for path_value in "${INPUT_DIR}" "${WORK_DIR}" "${OUTDIR}"; do
   if [[ "${path_value}" == /path/to/* ]]; then
@@ -41,12 +49,15 @@ mkdir -p "${WORK_DIR}" "${OUTDIR}" "${PIPELINE_INFO_DIR}"
 
 echo "Workflow version: ${WORKFLOW_VERSION}"
 echo "Workflow source: ${REPO_ROOT}"
+echo "Input mode: ${INPUT_MODE}; FASTQ layout: ${FASTQ_LAYOUT}; aligner: ${ALIGNER}"
+echo "Execution profile: ${PROFILE}"
+echo "Parameter file: ${PARAMS_FILE}"
 
 nextflow \
   -c "${CONFIG_FILE}" \
   run "${REPO_ROOT}" \
   -params-file "${PARAMS_FILE}" \
-  -profile local \
+  -profile "${PROFILE}" \
   -work-dir "${WORK_DIR}" \
   -resume \
   -with-report "${PIPELINE_INFO_DIR}/nextflow_report.html" \
@@ -54,5 +65,7 @@ nextflow \
   -with-trace "${PIPELINE_INFO_DIR}/nextflow_trace.tsv" \
   -with-dag "${PIPELINE_INFO_DIR}/nextflow_dag.html" \
   --input_dir "${INPUT_DIR}" \
-  --input_mode fastq \
+  --input_mode "${INPUT_MODE}" \
+  --fastq_layout "${FASTQ_LAYOUT}" \
+  --aligner "${ALIGNER}" \
   --outdir "${OUTDIR}"

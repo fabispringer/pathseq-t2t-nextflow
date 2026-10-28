@@ -12,6 +12,11 @@
 
 set -euo pipefail
 
+# Run-specific choices, explicit even when they match the parameter defaults.
+INPUT_MODE="fastq"       # fastq | bam
+FASTQ_LAYOUT="paired"    # paired | single; no effect on BAM reconstruction
+ALIGNER="star"           # star | bwa
+
 # Run-specific paths.
 INPUT_DIR="/path/to/input"
 WORK_DIR="/path/to/nextflow-work"
@@ -19,7 +24,7 @@ OUTDIR="/path/to/results"
 
 # Workflow paths and version.
 readonly REPO_ROOT="/path/to/pathseq-t2t-nextflow"
-readonly WORKFLOW_VERSION="v0.3.2"
+readonly WORKFLOW_VERSION="v0.3.3"
 readonly CONFIG_FILE="${REPO_ROOT}/nextflow.config"
 readonly PARAMS_FILE="/path/to/parameters.lsf.yaml"
 readonly PIPELINE_INFO_DIR="${OUTDIR}/pipeline_info"
@@ -63,6 +68,7 @@ mkdir -p \
 
 echo "Workflow version: ${WORKFLOW_VERSION}"
 echo "Execution profile: lsf"
+echo "Input mode: ${INPUT_MODE}; FASTQ layout: ${FASTQ_LAYOUT}; aligner: ${ALIGNER}"
 echo "Input directory:   ${INPUT_DIR}"
 echo "Work directory:    ${WORK_DIR}"
 echo "Output directory:  ${OUTDIR}"
@@ -80,5 +86,7 @@ nextflow \
   -with-trace "${PIPELINE_INFO_DIR}/nextflow_trace.tsv" \
   -with-dag "${PIPELINE_INFO_DIR}/nextflow_dag.html" \
   --input_dir "${INPUT_DIR}" \
-  --input_mode fastq \
+  --input_mode "${INPUT_MODE}" \
+  --fastq_layout "${FASTQ_LAYOUT}" \
+  --aligner "${ALIGNER}" \
   --outdir "${OUTDIR}"
