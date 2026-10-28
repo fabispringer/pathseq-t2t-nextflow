@@ -230,7 +230,7 @@ process BBDUK {
 
   output:
   tuple val(sample_id), path("${sample_id}.qc_{R1,R2,unpaired}.fastq.gz"), emit: reads
-  path "${sample_id}.bbduk_stats.txt", emit: stats
+  path "${sample_id}.{paired,unpaired}.bbduk_stats.txt", emit: stats
 
   script:
   def r1 = reads[0]
@@ -253,24 +253,21 @@ process BBDUK {
     out1=${sample_id}.qc_R1.fastq.gz \\
     out2=${sample_id}.qc_R2.fastq.gz \\
     outs=tmp_unpaired.fq \\
-    stats=${sample_id}.bbduk_stats.txt
+    stats=${sample_id}.paired.bbduk_stats.txt
 
   ${addUnpaired}
 
-  if [[ -s tmp_unpaired.fq ]]; then
-    bbduk.sh \\
-      -Xmx${task.memory.toGiga()}g \\
-      t=${task.cpus} \\
-      ordered=t \\
-      trd=t \\
-      ${params.qc.bbduk_params} \\
-      ref=${adapters} \\
-      minlen=${params.qc.min_length} \\
-      in=tmp_unpaired.fq \\
-      out=${sample_id}.qc_unpaired.fastq.gz
-  else
-    gzip -c </dev/null > ${sample_id}.qc_unpaired.fastq.gz
-  fi
+  bbduk.sh \\
+    -Xmx${task.memory.toGiga()}g \\
+    t=${task.cpus} \\
+    ordered=t \\
+    trd=t \\
+    ${params.qc.bbduk_params} \\
+    ref=${adapters} \\
+    minlen=${params.qc.min_length} \\
+    in=tmp_unpaired.fq \\
+    out=${sample_id}.qc_unpaired.fastq.gz \\
+    stats=${sample_id}.unpaired.bbduk_stats.txt
 
   rm -f tmp_unpaired.fq
   """

@@ -130,7 +130,8 @@ final PathSeq-T2T results:
 
 - `samples/<sample>/read_qc/raw_fastqc/`
 - `samples/<sample>/read_qc/post_qc_fastqc/` (including cleaned singleton reads)
-- `samples/<sample>/read_qc/<sample>.bbduk_stats.txt`
+- `samples/<sample>/read_qc/<sample>.paired.bbduk_stats.txt`
+- `samples/<sample>/read_qc/<sample>.unpaired.bbduk_stats.txt`
 - `samples/<sample>/host_mapping/<sample>.host_alignment.flagstat.tsv`
 - `samples/<sample>/host_mapping/<sample>.star.Log.final.out` for STAR runs
 - `samples/<sample>/host_mapping/<sample>.star.ReadsPerGene.out.tsv` for STAR runs
@@ -138,6 +139,15 @@ final PathSeq-T2T results:
 - `samples/<sample>/pathseq_t2t/classification_stats/`
 - `samples/<sample>/pathseq_t2t/results/`
 - `pipeline_info/input_audit/` for BAM-input reconstruction validation
+
+BBDuk reports statistics separately for the paired and unpaired QC passes,
+including a zero-read report when a pass has no input. For single-end FASTQ
+input, the paired report contains zero reads and the unpaired report describes
+the actual reads. The unpaired pass also processes singletons emitted by the
+paired pass, so the two reports are not additive sample-level read totals.
+These two labelled reports replace the former `<sample>.bbduk_stats.txt`.
+When reusing an existing results directory, that old file may remain from an
+earlier run; use the two labelled reports for the current run.
 
 The resulting directory tree is:
 
@@ -183,7 +193,8 @@ The resulting directory tree is:
         │   ├── post_qc_fastqc/
         │   ├── <sample>.raw_fastqc_counts.tsv
         │   ├── <sample>.post_fastqc_counts.tsv
-        │   └── <sample>.bbduk_stats.txt
+        │   ├── <sample>.paired.bbduk_stats.txt
+        │   └── <sample>.unpaired.bbduk_stats.txt
         ├── host_mapping/
         │   ├── <sample>.host_alignment.flagstat.tsv
         │   ├── <sample>.star.Log.final.out             # STAR only

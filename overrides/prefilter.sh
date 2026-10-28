@@ -100,8 +100,12 @@ HLP
 
   if (( dont_overwrite )); then
     local ok_u=0 ok_d=0 ok_f=0
-    [[ -s "${unaligned_out}" ]] && samtools quickcheck "${unaligned_out}" >/dev/null 2>&1 && ok_u=1
-    [[ -s "${decoys_out}" ]] && samtools quickcheck "${decoys_out}" >/dev/null 2>&1 && ok_d=1
+    [[ -s "${unaligned_out}" ]] &&
+      samtools quickcheck "${unaligned_out}" >/dev/null 2>&1 &&
+      samtools view -c "${unaligned_out}" >/dev/null 2>&1 && ok_u=1
+    [[ -s "${decoys_out}" ]] &&
+      samtools quickcheck "${decoys_out}" >/dev/null 2>&1 &&
+      samtools view -c "${decoys_out}" >/dev/null 2>&1 && ok_d=1
     [[ -s "${flagstat_out}" ]] && ok_f=1
     if (( ok_u && ok_d && ok_f )); then
       log "prefilter --dont-overwrite: outputs already present and valid -> skipping"

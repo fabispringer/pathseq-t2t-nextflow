@@ -34,6 +34,8 @@ against an already-created runtime, copy it to both locations; a fresh
 - replaces asynchronous process-substitution writers with explicit,
   synchronous temporary BAMs;
 - validates the input and completed temporary BAMs before publishing outputs;
+- requires both `samtools quickcheck` and a successful full read of each
+  existing BAM before `--dont-overwrite` can skip regeneration;
 - renames each validated BAM and the flagstat table to its final path
   (the output set is not a single atomic transaction);
 - removes incomplete temporary outputs when any prefilter step fails.
