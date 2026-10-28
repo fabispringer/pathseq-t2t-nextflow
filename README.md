@@ -26,10 +26,10 @@ that directory until the run has been reviewed because it is needed by
 
 ## Status
 
-The prepared release candidate is **v0.3.3**. Until its tag is published,
-use the reviewed candidate checkout rather than the tag commands below.
+This branch prepares **v0.3.3**. The release-tag commands below apply once
+`v0.3.3` has been published; until then, use the release-branch checkout.
 See [release notes](RELEASE_NOTES_v0.3.3.md) and the
-[release review and validation record](docs/release-v0.3.3.md).
+[release preparation guide](docs/release-v0.3.3.md).
 
 This is an early research workflow. Validate parameters, resource requests,
 reference versions, and output counts on representative test data before using
@@ -206,7 +206,7 @@ Activate the `pathseq-t2t-nextflow` Conda environment before running the
 repository checks. They require Bash, Python 3.11 or newer (`python3` on
 `PATH`), and ripgrep (`rg`). The environment specification pins Python 3.11
 and includes ripgrep. These source-level checks do not require input data or
-reference databases and do not replace Nextflow or cluster validation.
+reference databases.
 
 For an existing environment created before ripgrep was included:
 

@@ -26,8 +26,8 @@ It also allows failed stages to resume independently with `-resume`.
 
 ## Configure
 
-The prepared candidate is v0.3.3, not yet published. See
-[release validation](release-v0.3.3.md) before using the release-tag examples.
+This branch prepares v0.3.3. The release-tag examples apply after the tag is
+published. See the [release preparation guide](release-v0.3.3.md).
 
 Use `parameters.example.yaml` as the documented defaults/reference and copy
 it to each run directory as `parameters.yaml`. Set `INPUT_MODE`,

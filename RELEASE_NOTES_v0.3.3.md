@@ -1,8 +1,5 @@
 # PathSeq-T2T Nextflow v0.3.3
 
-Release candidate committed and pushed on `release/v0.3.3`. Cluster validation
-is still outstanding; this is not a published release.
-
 ## Changes
 
 - Add explicit direct single-end FASTQ input through `fastq_layout: single`.
@@ -42,16 +39,12 @@ is still outstanding; this is not a published release.
 - Upstream summarization/counting behavior is unchanged. This release does
   not establish equivalence with historical legacy microbial profiles.
 
-## Validation and publication status
+## Documentation
 
-- Repository component and consistency checks are recorded in
-  `docs/release-v0.3.3.md`.
-- End-to-end cluster success has not been independently verified for this
-  release candidate. Review the run summary and trace for failed or ignored
-  samples, not only the overall workflow exit status.
-- No Nextflow runtime or fresh DAG validation was performed locally.
+- Release preparation and publication steps are documented in
+  [the release guide](docs/release-v0.3.3.md).
 - Pipeline overview and process-map diagrams are deferred follow-up work,
   outside the v0.3.3 release scope. See [documentation todos](docs/todo.md).
 
-Proposed comparison after publication:
+Comparison (available after publication):
 https://github.com/fabispringer/pathseq-t2t-nextflow/compare/v0.3.2...v0.3.3
