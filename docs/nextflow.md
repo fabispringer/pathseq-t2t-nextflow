@@ -4,9 +4,9 @@ This workflow moves sample handling and job submission into Nextflow:
 
 1. symlink direct inputs or copy remote inputs into the Nextflow work directory
 2. optional BAM-to-FASTQ reconstruction for BAM-only cohorts
-3. raw FastQC on each paired FASTQ sample
+3. raw FastQC on the staged FASTQ streams
 4. stringent BBDuk cleanup using the `vortex_knight` adapter sequences
-5. post-QC FastQC on the cleaned paired reads
+5. post-QC FastQC on the cleaned FASTQ streams
 6. GRCh38 alignment with either BWA or STAR
 7. PathSeq-T2T filtering and classification
 
@@ -26,6 +26,23 @@ It also allows failed stages to resume independently with `-resume`.
 
 ## Configure
 
+The prepared candidate is v0.3.3, not yet published. See
+[release validation](release-v0.3.3.md) before using the release-tag examples.
+
+Use `parameters.example.yaml` as the documented defaults/reference and copy
+it to each run directory as `parameters.yaml`. Set `INPUT_MODE`,
+`FASTQ_LAYOUT`, and `ALIGNER` explicitly in the copied `run.sh`; these are
+passed as command-line parameters even when they match the defaults. Set
+`PROFILE` to `local`, `slurm`, or `lsf`. Only explicit command-line parameters
+override YAML values, not the entire file.
+
+When the launcher is outside the source checkout, set/export `REPO_ROOT` to
+the source repository. `PARAMS_FILE` defaults to `parameters.yaml` beside the
+launcher; `CONFIG_FILE` defaults to the repository's `nextflow.config`.
+Archive the launcher, YAML, any local configuration, and the published
+`workflow_version.tsv` together. See the [README](../README.md#explicit-run-choices-and-archived-run-files)
+for an example.
+
 Edit `parameters.yaml` before running. The important fields are:
 
 - `input_mode` - `fastq` (default) or `bam`
@@ -42,7 +59,8 @@ Edit `parameters.yaml` before running. The important fields are:
 - `conda_prefix` - absolute path to the `pathseq-t2t-nextflow` Conda
   environment; the SLURM and LSF profiles add its executables and Java runtime
   to every batch job
-- `aligner` - `star` or `bwa`
+- `aligner` - `star` (default, splice-aware) or `bwa` (not splice-aware);
+  both accept either input mode. `dragen` is not a workflow aligner option
 - `qc.adapters` - adapter FASTA; use this repo's `assets/adapters.fa`
 - `qc.min_length` - minimum retained read length; configured as `45`
 - `qc.bbduk_params` - stringent shotgun parameters matching `vortex_knight`
@@ -182,11 +200,11 @@ have been checked; it is required for `-resume`.
 ## Workflow version and provenance
 
 Release versions follow semantic versioning and are published as immutable Git
-tags such as `v0.3.2`. Run a distinct release from a detached tag:
+tags such as `v0.3.3`. Run a distinct release from a detached tag:
 
 ```bash
 git fetch --tags
-git checkout --detach v0.3.2
+git checkout --detach v0.3.3
 git describe --tags --exact-match
 ```
 
@@ -245,7 +263,10 @@ decimal suffix (for example, `6.0`) are normalized back to integer count text
 by the cohort collator; genuinely fractional or negative counts are rejected.
 
 For BWA, the pipeline starts PathSeq-T2T at `prefilter` using the aligned
-GRCh38 BAM.
+GRCh38 BAM. The reviewed `prefilter.sh` override writes its BAMs synchronously,
+validates each completed temporary BAM, and renames each validated output
+to its final path. It preserves the upstream read-selection criteria while preventing downstream
+processes from receiving a partially written BAM.
 
 ## Run
 
@@ -265,7 +286,7 @@ nextflow run . \
 ```
 
 When input is on another high-I/O shared filesystem, use
-`--remote_input_dir`; the first pipeline stage copies each selected FASTQ pair
+`--remote_input_dir`; the first pipeline stage copies each selected FASTQ stream
 or BAM into its Nextflow work directory:
 
 ```bash
@@ -290,7 +311,8 @@ to `<sample>_R1.fastq.gz`, `<sample>_R2.fastq.gz`, and
 `<sample>_unpaired.fastq.gz`: paired input populates R1/R2 and single input
 populates unpaired. A paired sample is rejected if its pair is incomplete or
 both naming conventions are present; a single sample is rejected if both R1
-naming conventions are present.
+naming conventions are present. In single mode R2 files are not selected;
+this is not automatic paired/single detection.
 
 The trace includes both observed utilization (`%cpu`, `peak_rss`, I/O, and
 runtime) and the requested `cpus`, `memory`, and `time` for each task.
@@ -349,8 +371,9 @@ bsub < run_lsf.sh
 ```
 
 Before submission, edit its `#BSUB` project and queue, plus `INPUT_DIR`,
-`WORK_DIR`, `OUTDIR`, `REPO_ROOT`, and `PARAMS_FILE`. The wrapper checks out
-the immutable `v0.3.2` tag and expects Nextflow and `bsub` to be available in
+`WORK_DIR`, `OUTDIR`, `REPO_ROOT`, and `PARAMS_FILE`, plus `INPUT_MODE`,
+`FASTQ_LAYOUT`, and `ALIGNER`. The wrapper checks out
+the immutable `v0.3.3` tag and expects Nextflow and `bsub` to be available in
 the controller job environment. The `#BSUB -P` directive applies only to the
 controller; child jobs use `lsf.project` from the parameter file. If the
 cluster prohibits scheduler submission from compute jobs, run the same
