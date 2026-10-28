@@ -11,21 +11,6 @@ affiliated with its upstream maintainers.
 
 ## Workflow overview
 
-<p align="center">
-  <img src="docs/images/pipeline_overview.svg" alt="pathseq-t2t-nextflow workflow overview" width="100%">
-  <br>
-  <em>Simplified data-flow overview. Exact branches depend on the selected input mode, host aligner, and classifiers.</em>
-</p>
-
-<details>
-<summary>Technical Nextflow process map</summary>
-
-<p align="center">
-  <img src="docs/images/pipeline_process_map.svg" alt="pathseq-t2t-nextflow technical process map" width="100%">
-</p>
-
-</details>
-
 1. stage paired or single-end FASTQ files, or reconstruct FASTQs from primary BAM records;
 2. run raw FastQC;
 3. apply configurable BBDuk read cleanup and run post-QC FastQC;

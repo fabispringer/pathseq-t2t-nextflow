@@ -1,6 +1,7 @@
 # PathSeq-T2T Nextflow v0.3.3
 
-Release candidate prepared locally. Not yet tagged or published.
+Release candidate committed and pushed on `release/v0.3.3`. Cluster validation
+is still outstanding; this is not a published release.
 
 ## Changes
 
@@ -49,7 +50,8 @@ Release candidate prepared locally. Not yet tagged or published.
   release candidate. Review the run summary and trace for failed or ignored
   samples, not only the overall workflow exit status.
 - No Nextflow runtime or fresh DAG validation was performed locally.
-- Existing pipeline artwork remains provisional and is not a release gate.
+- Pipeline overview and process-map diagrams are deferred follow-up work,
+  outside the v0.3.3 release scope. See [documentation todos](docs/todo.md).
 
 Proposed comparison after publication:
 https://github.com/fabispringer/pathseq-t2t-nextflow/compare/v0.3.2...v0.3.3
