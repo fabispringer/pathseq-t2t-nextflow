@@ -1,8 +1,9 @@
 cmd_prefilter() {
+  local input_bam="" aligner="" decoys_to_mask=""
   local decoys_bed=""
   local unaligned_out="" decoys_out="" flagstat_out=""
   local sample_id=""
-  local threads=1
+  local threads=""
   local dont_overwrite=0
 
   while [[ $# -gt 0 ]]; do

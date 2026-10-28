@@ -28,6 +28,7 @@ python3 tests/test_merge_star_gene_counts.py
 python3 tests/test_collate_kraken_results.py
 python3 tests/test_check_fastq_content.py
 python3 tests/test_prefilter_transaction.py
+python3 tests/test_prefilter_arguments.py
 python3 tests/test_run_launcher.py
 
 if rg -n -i '(fspringe|/g/scb|pathseq-t2t_setup|openclaw|gmail)' \
